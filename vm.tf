@@ -82,7 +82,7 @@ data "xenorchestra_template" "jumpcloud_template" {
 }
 
 data "xenorchestra_template" "ubuntu_template" {
-  name_label = "Ubuntu 24.04"
+  name_label = "Ubuntu 24.04 Cloud-Init (Hub)"
 }
 
 data "xenorchestra_sr" "sr" {
