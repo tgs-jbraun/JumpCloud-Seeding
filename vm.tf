@@ -77,11 +77,11 @@ data "xenorchestra_hosts" "pool_hosts" {
   pool_id = data.xenorchestra_pool.pool.id
 }
 
-data "xenorchestra_template" "vm_template" {
+data "xenorchestra_template" "jumpcloud_template" {
   name_label = "Windows 11 JumpCloud - Template"
 }
 
-data "xenorchestra_template" "vm_template" {
+data "xenorchestra_template" "ubuntu_template" {
   name_label = "Ubuntu 24.04"
 }
 
