@@ -136,7 +136,6 @@ resource "xenorchestra_vm" "ubuntu" {
     size       = 10 * local.gib
   }
 
-  wait_for_ip = true
 }
 
 # ---------------------------------------------------------------------------
