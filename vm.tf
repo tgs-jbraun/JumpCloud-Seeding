@@ -1,11 +1,11 @@
 # Looks up existing Xen Orchestra objects, prints them as outputs, and deploys
-# one Ubuntu Server 24.04 cloud-init VM (2 vCPU, 4 GiB RAM, 10 GiB disk).
+# vm_count Ubuntu Server 24.04 cloud-init VMs (2 vCPU, 4 GiB RAM, 10 GiB disk each).
 #
 # Usage:
 #   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
 #   terraform init
-#   terraform plan      # review: should show 1 VM to add
-#   terraform apply     # creates the VM
+#   terraform plan      # review: should show vm_count VMs to add
+#   terraform apply     # creates the VMs
 #   terraform output
 
 terraform {
@@ -57,7 +57,17 @@ variable "ubuntu_template_name" {
 
 variable "vm_name" {
   type        = string
-  description = "Name label and hostname for the Ubuntu VM"
+  description = "Name prefix for the Ubuntu VMs; each gets a -01, -02, ... suffix"
+}
+
+variable "vm_count" {
+  type        = number
+  description = "Number of Ubuntu VMs to deploy"
+
+  validation {
+    condition     = var.vm_count >= 1 && floor(var.vm_count) == var.vm_count
+    error_message = "vm_count must be a whole number of at least 1."
+  }
 }
 
 variable "vm_ssh_public_key" {
@@ -105,31 +115,35 @@ data "xenorchestra_vms" "pool_vms" {
 }
 
 # ---------------------------------------------------------------------------
-# Ubuntu Server 24.04 VM
+# Ubuntu Server 24.04 VMs
 # ---------------------------------------------------------------------------
 
 locals {
   gib = 1024 * 1024 * 1024
 
-  ubuntu_cloud_config = "#cloud-config\n${yamlencode(merge(
-    {
-      hostname         = var.vm_name
-      manage_etc_hosts = true
-      package_update   = true
-    },
-    var.vm_ssh_public_key == "" ? {} : { ssh_authorized_keys = [var.vm_ssh_public_key] }
-  ))}"
+  # e.g. ubuntu-2404-01, ubuntu-2404-02, ubuntu-2404-03
+  ubuntu_vm_names = [for i in range(var.vm_count) : format("%s-%02d", var.vm_name, i + 1)]
 }
 
 resource "xenorchestra_vm" "ubuntu" {
-  name_label       = var.vm_name
+  # Keyed by name, so changing vm_count only adds/removes VMs at the end
+  for_each = toset(local.ubuntu_vm_names)
+
+  name_label       = each.key
   name_description = "Ubuntu Server 24.04 - managed by Terraform"
   template         = data.xenorchestra_template.ubuntu_template.id
 
   cpus       = 2
   memory_max = 4 * local.gib
 
-  cloud_config = local.ubuntu_cloud_config
+  cloud_config = "#cloud-config\n${yamlencode(merge(
+    {
+      hostname         = each.key
+      manage_etc_hosts = true
+      package_update   = true
+    },
+    var.vm_ssh_public_key == "" ? {} : { ssh_authorized_keys = [var.vm_ssh_public_key] }
+  ))}"
 
   network {
     network_id = data.xenorchestra_network.wan.id
@@ -137,10 +151,9 @@ resource "xenorchestra_vm" "ubuntu" {
 
   disk {
     sr_id      = data.xenorchestra_sr.sr.id
-    name_label = "${var.vm_name}-disk0"
+    name_label = "${each.key}-disk0"
     size       = 10 * local.gib
   }
-
 }
 
 # ---------------------------------------------------------------------------
@@ -167,9 +180,12 @@ output "storage_repository" {
   value       = data.xenorchestra_sr.sr
 }
 
-output "network" {
-  description = "Network for lab VMs"
-  value       = data.xenorchestra_network.network
+output "networks" {
+  description = "VLAN networks available to lab VMs"
+  value = {
+    servers = data.xenorchestra_network.servers
+    wan = data.xenorchestra_network.wan
+  }
 }
 
 output "existing_vms" {
@@ -177,11 +193,12 @@ output "existing_vms" {
   value       = [for vm in data.xenorchestra_vms.pool_vms.vms : "${vm.name_label} (${vm.power_state})"]
 }
 
-output "ubuntu_vm" {
-  description = "The deployed Ubuntu Server 24.04 VM"
+output "ubuntu_vms" {
+  description = "The deployed Ubuntu Server 24.04 VMs, keyed by name"
   value = {
-    id             = xenorchestra_vm.ubuntu.id
-    name           = xenorchestra_vm.ubuntu.name_label
-    ipv4_addresses = xenorchestra_vm.ubuntu.ipv4_addresses
+    for name, vm in xenorchestra_vm.ubuntu : name => {
+      id             = vm.id
+      ipv4_addresses = vm.ipv4_addresses
+    }
   }
 }
