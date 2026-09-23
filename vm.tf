@@ -154,7 +154,7 @@ output "hosts" {
 
 output "template" {
   description = "VM template used for lab deployments"
-  value       = data.xenorchestra_template.vm_template
+  value       = data.xenorchestra_template.jumpcloud_template
 }
 
 output "storage_repository" {
