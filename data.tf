@@ -18,6 +18,10 @@ data "xenorchestra_template" "ubuntu_template" {
   name_label = "Ubuntu 24.04 Cloud-Init (Hub)"
 }
 
+data "xenorchestra_template" "pfsense_template" {
+  name_label = "pfSense 2.6 (Hub)"
+}
+
 data "xenorchestra_sr" "sr" {
   name_label = "my-storage-repository"
   pool_id    = data.xenorchestra_pool.pool.id

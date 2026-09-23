@@ -41,8 +41,16 @@ output "ubuntu_vms" {
   value = {
     for name, vm in xenorchestra_vm.ubuntu : name => {
       id             = vm.id
-      lab_ip         = local.ubuntu_vms[name].lab_ip
+      lab_mac        = local.ubuntu_vms[name].lab_mac
       ipv4_addresses = vm.ipv4_addresses
     }
+  }
+}
+
+output "pfsense_vm" {
+  description = "The deployed pfSense VM"
+  value = {
+    id             = xenorchestra_vm.pfsense.id
+    ipv4_addresses = xenorchestra_vm.pfsense.ipv4_addresses
   }
 }
