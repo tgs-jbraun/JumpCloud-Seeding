@@ -54,3 +54,13 @@ output "pfsense_vm" {
     ipv4_addresses = xenorchestra_vm.pfsense.ipv4_addresses
   }
 }
+
+output "windows_vms" {
+  description = "The deployed Windows 11 JumpCloud VMs, keyed by name"
+  value = {
+    for name, vm in xenorchestra_vm.windows : name => {
+      id             = vm.id
+      ipv4_addresses = vm.ipv4_addresses
+    }
+  }
+}

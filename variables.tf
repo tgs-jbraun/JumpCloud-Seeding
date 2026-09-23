@@ -43,3 +43,13 @@ variable "vm_ssh_public_key" {
   type        = string
   description = "SSH public key for the default ubuntu user (empty string to skip)"
 }
+
+variable "windows_vm_count" {
+  type        = number
+  description = "Number of Windows 11 JumpCloud test VMs (JUMPCLOUD-TEST-1, -2, ...)"
+
+  validation {
+    condition     = var.windows_vm_count >= 0 && floor(var.windows_vm_count) == var.windows_vm_count
+    error_message = "windows_vm_count must be a whole number of 0 or more."
+  }
+}

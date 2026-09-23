@@ -1,11 +1,12 @@
 # Looks up existing Xen Orchestra objects, prints them as outputs, and deploys
 # vm_count Ubuntu Server 24.04 cloud-init VMs (2 vCPU, 4 GiB RAM, 10 GiB disk each)
-# plus a pfSense 2.6 firewall VM (2 vCPU, 2 GiB RAM, 20 GiB template-default disk).
+# plus a pfSense 2.6 firewall VM (2 vCPU, 2 GiB RAM, 20 GiB template-default disk)
+# and windows_vm_count Windows 11 JumpCloud VMs (2 vCPU, 4 GiB RAM, 64 GiB disk each).
 #
 # Usage:
 #   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
 #   terraform init
-#   terraform plan      # review: should show vm_count + 1 VMs to add
+#   terraform plan      # review: should show vm_count + 1 + windows_vm_count VMs to add
 #   terraform apply     # creates the VMs
 #   terraform output
 #
@@ -15,6 +16,7 @@
 #   data.tf       Lookups of existing XO objects
 #   vm.tf         Resources: the Ubuntu VMs
 #   pfsense.tf    Resources: the pfSense firewall VM
+#   windows.tf    Resources: the Windows 11 JumpCloud VMs
 #   outputs.tf    Outputs
 
 # ---------------------------------------------------------------------------
