@@ -72,7 +72,7 @@ data "xenorchestra_sr" "sr" {
 }
 
 data "xenorchestra_network" "network" {
-  name_label = "Pool-wide network"
+  name_label = "LAN"
   pool_id    = data.xenorchestra_pool.pool.id
 }
 
