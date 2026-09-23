@@ -7,5 +7,6 @@ xoa_password = "CHANGE_ME"
 xoa_insecure = true
 
 # Ubuntu Server 24.04 VM
-vm_name              = "ubuntu-2404-01"
+vm_name              = "ubuntu-2404"                 # prefix: VMs become ubuntu-2404-01, -02, ...
+vm_count             = 3
 vm_ssh_public_key    = ""                          # e.g. "ssh-ed25519 AAAA... you@host"
