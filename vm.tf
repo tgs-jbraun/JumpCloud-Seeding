@@ -63,7 +63,7 @@ data "xenorchestra_hosts" "pool_hosts" {
 }
 
 data "xenorchestra_template" "vm_template" {
-  name_label = "☁️JUMPCLOUD-TEST"
+  name_label = "Windows 11 OOBE"
 }
 
 data "xenorchestra_sr" "sr" {
