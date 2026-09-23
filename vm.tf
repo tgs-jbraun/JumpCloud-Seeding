@@ -50,6 +50,11 @@ variable "xoa_insecure" {
   description = "Skip TLS certificate verification (set true for a self-signed XOA cert)"
 }
 
+variable "ubuntu_template_name" {
+  type        = string
+  description = "Name of the Ubuntu Server 24.04 cloud-init template in XO"
+}
+
 variable "vm_name" {
   type        = string
   description = "Name label and hostname for the Ubuntu VM"
@@ -85,7 +90,12 @@ data "xenorchestra_sr" "sr" {
   pool_id    = data.xenorchestra_pool.pool.id
 }
 
-data "xenorchestra_network" "network" {
+data "xenorchestra_network" "servers" {
+  name_label = "Servers"
+  pool_id    = data.xenorchestra_pool.pool.id
+}
+
+data "xenorchestra_network" "wan" {
   name_label = "LAN"
   pool_id    = data.xenorchestra_pool.pool.id
 }
@@ -122,7 +132,7 @@ resource "xenorchestra_vm" "ubuntu" {
   cloud_config = local.ubuntu_cloud_config
 
   network {
-    network_id = data.xenorchestra_network.network.id
+    network_id = data.xenorchestra_network.wan.id
   }
 
   disk {
