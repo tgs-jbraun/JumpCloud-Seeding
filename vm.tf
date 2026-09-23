@@ -111,15 +111,14 @@ data "xenorchestra_vms" "pool_vms" {
 }
 
 # ---------------------------------------------------------------------------
-# Lab network - created and managed by Terraform
+# Lab network - existing XO SDN Controller private network
 # ---------------------------------------------------------------------------
 
-# Private network with no physical uplink (no source PIF / VLAN), so lab
-# traffic stays inside XCP-ng.
-resource "xenorchestra_network" "jumpcloud_lab_net" {
-  name_label       = "jumpcloud-lab-net"
-  name_description = "Isolated JumpCloud lab network - managed by Terraform"
-  pool_id          = data.xenorchestra_pool.pool.id
+# Created in XO by the SDN Controller (spans all hosts in the pool). Looked
+# up rather than managed, since the provider cannot create SDN networks.
+data "xenorchestra_network" "jumpcloud_lab_net" {
+  name_label = "jumpcloud-lab-net"
+  pool_id    = data.xenorchestra_pool.pool.id
 }
 
 # ---------------------------------------------------------------------------
@@ -190,7 +189,7 @@ resource "xenorchestra_vm" "ubuntu" {
 
   # NIC 1: lab network (static)
   network {
-    network_id  = xenorchestra_network.jumpcloud_lab_net.id
+    network_id  = data.xenorchestra_network.jumpcloud_lab_net.id
     mac_address = each.value.lab_mac
   }
 
@@ -230,7 +229,7 @@ output "networks" {
   value = {
     servers            = data.xenorchestra_network.servers
     wan            = data.xenorchestra_network.wan
-    jumpcloud_lab_net = xenorchestra_network.jumpcloud_lab_net
+    jumpcloud_lab_net = data.xenorchestra_network.jumpcloud_lab_net
   }
 }
 
