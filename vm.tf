@@ -110,6 +110,18 @@ data "xenorchestra_vms" "pool_vms" {
 }
 
 # ---------------------------------------------------------------------------
+# Lab network - created and managed by Terraform
+# ---------------------------------------------------------------------------
+
+# Private network with no physical uplink (no source PIF / VLAN), so lab
+# traffic stays inside XCP-ng.
+resource "xenorchestra_network" "jumpcloud_lab_net" {
+  name_label       = "jumpcloud-lab-net"
+  name_description = "Isolated JumpCloud lab network - managed by Terraform"
+  pool_id          = data.xenorchestra_pool.pool.id
+}
+
+# ---------------------------------------------------------------------------
 # Ubuntu Server 24.04 VMs
 # ---------------------------------------------------------------------------
 
@@ -127,6 +139,7 @@ resource "xenorchestra_vm" "ubuntu" {
   name_label       = each.key
   name_description = "Ubuntu Server 24.04 - managed by Terraform"
   template         = data.xenorchestra_template.ubuntu_template.id
+  tags             = ["jumpcloud-lab"]
 
   cpus       = 2
   memory_max = 4 * local.gib
@@ -140,8 +153,14 @@ resource "xenorchestra_vm" "ubuntu" {
     var.vm_ssh_public_key == "" ? {} : { ssh_authorized_keys = [var.vm_ssh_public_key] }
   ))}"
 
+  # NIC 0: LAN
   network {
     network_id = data.xenorchestra_network.wan.id
+  }
+
+  # NIC 1: lab network
+  network {
+    network_id = xenorchestra_network.jumpcloud_lab_net.id
   }
 
   disk {
@@ -176,10 +195,11 @@ output "storage_repository" {
 }
 
 output "networks" {
-  description = "VLAN networks available to lab VMs"
+  description = "Networks available to lab VMs"
   value = {
-    servers = data.xenorchestra_network.servers
-    wan = data.xenorchestra_network.wan
+    servers            = data.xenorchestra_network.servers
+    wan            = data.xenorchestra_network.wan
+    jumpcloud_lab_net = xenorchestra_network.jumpcloud_lab_net
   }
 }
 
