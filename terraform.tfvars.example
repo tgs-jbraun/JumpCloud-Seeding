@@ -7,6 +7,5 @@ xoa_password = "CHANGE_ME"
 xoa_insecure = true
 
 # Ubuntu Server 24.04 VM
-ubuntu_template_name = "Ubuntu 24.04 Cloud-Init"   # set to the exact template name in XO
 vm_name              = "ubuntu-2404-01"
 vm_ssh_public_key    = ""                          # e.g. "ssh-ed25519 AAAA... you@host"

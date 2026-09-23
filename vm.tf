@@ -50,11 +50,6 @@ variable "xoa_insecure" {
   description = "Skip TLS certificate verification (set true for a self-signed XOA cert)"
 }
 
-variable "ubuntu_template_name" {
-  type        = string
-  description = "Name of the Ubuntu Server 24.04 cloud-init template in XO"
-}
-
 variable "vm_name" {
   type        = string
   description = "Name label and hostname for the Ubuntu VM"
