@@ -63,7 +63,7 @@ data "xenorchestra_hosts" "pool_hosts" {
 }
 
 data "xenorchestra_template" "vm_template" {
-  name_label = "test-fs01"
+  name_label = "☁️JUMPCLOUD-TEST"
 }
 
 data "xenorchestra_sr" "sr" {
