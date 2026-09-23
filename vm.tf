@@ -81,8 +81,8 @@ data "xenorchestra_template" "vm_template" {
   name_label = "Windows 11 JumpCloud - Template"
 }
 
-data "xenorchestra_template" "ubuntu_template" {
-  name_label = var.ubuntu_template_name
+data "xenorchestra_template" "vm_template" {
+  name_label = "Ubuntu 24.04"
 }
 
 data "xenorchestra_sr" "sr" {
