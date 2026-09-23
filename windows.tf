@@ -33,7 +33,6 @@ resource "xenorchestra_vm" "windows" {
   # Keep the template's firmware (Windows 11 requires UEFI)
   hvm_boot_firmware = data.xenorchestra_template.jumpcloud_template.boot_firmware
 
-  cpus       = 2
   memory_max = 4 * local.gib
 
   # NIC 0: lab network
