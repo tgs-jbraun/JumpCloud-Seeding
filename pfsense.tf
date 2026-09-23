@@ -17,6 +17,7 @@ resource "xenorchestra_vm" "pfsense" {
   name_label       = "pfSense"
   name_description = "pfSense 2.6 firewall for the JumpCloud lab - managed by Terraform"
   template         = data.xenorchestra_template.pfsense_template.id
+  tags             = ["jumpcloud-lab"]
 
   cpus       = 2
   memory_max = 2 * local.gib
