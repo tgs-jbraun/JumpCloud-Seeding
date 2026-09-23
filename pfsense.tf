@@ -34,6 +34,9 @@ resource "xenorchestra_vm" "pfsense" {
   disk {
     sr_id      = data.xenorchestra_sr.sr.id
     name_label = "pfSense-disk0"
-    size       = 10 * local.gib
+    # Matches the "pfSense 2.6 (Hub)" template's disk (21474836480 bytes).
+    # The provider can't read a template's disk size, and disks can't shrink,
+    # so update this if the template changes.
+    size = 20 * local.gib
   }
 }

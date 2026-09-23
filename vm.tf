@@ -1,6 +1,6 @@
 # Looks up existing Xen Orchestra objects, prints them as outputs, and deploys
 # vm_count Ubuntu Server 24.04 cloud-init VMs (2 vCPU, 4 GiB RAM, 10 GiB disk each)
-# plus a pfSense 2.6 firewall VM (2 vCPU, 2 GiB RAM, 10 GiB disk).
+# plus a pfSense 2.6 firewall VM (2 vCPU, 2 GiB RAM, 20 GiB template-default disk).
 #
 # Usage:
 #   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
