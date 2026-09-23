@@ -1,11 +1,11 @@
-# Read-only discovery config: looks up existing Xen Orchestra objects and
-# prints them as outputs. No resources are created, changed, or destroyed.
+# Looks up existing Xen Orchestra objects, prints them as outputs, and deploys
+# one Ubuntu Server 24.04 cloud-init VM (2 vCPU, 4 GiB RAM, 10 GiB disk).
 #
 # Usage:
 #   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
 #   terraform init
-#   terraform plan      # shows the outputs that would be read
-#   terraform refresh   # or: terraform apply (no resources, so nothing changes)
+#   terraform plan      # review: should show 1 VM to add
+#   terraform apply     # creates the VM
 #   terraform output
 
 terraform {
@@ -50,6 +50,21 @@ variable "xoa_insecure" {
   description = "Skip TLS certificate verification (set true for a self-signed XOA cert)"
 }
 
+variable "ubuntu_template_name" {
+  type        = string
+  description = "Name of the Ubuntu Server 24.04 cloud-init template in XO"
+}
+
+variable "vm_name" {
+  type        = string
+  description = "Name label and hostname for the Ubuntu VM"
+}
+
+variable "vm_ssh_public_key" {
+  type        = string
+  description = "SSH public key for the default ubuntu user (empty string to skip)"
+}
+
 # ---------------------------------------------------------------------------
 # Lookups - each one fails the plan if the named object is not visible
 # ---------------------------------------------------------------------------
@@ -66,6 +81,10 @@ data "xenorchestra_template" "vm_template" {
   name_label = "Windows 11 JumpCloud - Template"
 }
 
+data "xenorchestra_template" "ubuntu_template" {
+  name_label = var.ubuntu_template_name
+}
+
 data "xenorchestra_sr" "sr" {
   name_label = "my-storage-repository"
   pool_id    = data.xenorchestra_pool.pool.id
@@ -78,6 +97,46 @@ data "xenorchestra_network" "network" {
 
 data "xenorchestra_vms" "pool_vms" {
   pool_id = data.xenorchestra_pool.pool.id
+}
+
+# ---------------------------------------------------------------------------
+# Ubuntu Server 24.04 VM
+# ---------------------------------------------------------------------------
+
+locals {
+  gib = 1024 * 1024 * 1024
+
+  ubuntu_cloud_config = "#cloud-config\n${yamlencode(merge(
+    {
+      hostname         = var.vm_name
+      manage_etc_hosts = true
+      package_update   = true
+    },
+    var.vm_ssh_public_key == "" ? {} : { ssh_authorized_keys = [var.vm_ssh_public_key] }
+  ))}"
+}
+
+resource "xenorchestra_vm" "ubuntu" {
+  name_label       = var.vm_name
+  name_description = "Ubuntu Server 24.04 - managed by Terraform"
+  template         = data.xenorchestra_template.ubuntu_template.id
+
+  cpus       = 2
+  memory_max = 4 * local.gib
+
+  cloud_config = local.ubuntu_cloud_config
+
+  network {
+    network_id = data.xenorchestra_network.network.id
+  }
+
+  disk {
+    sr_id      = data.xenorchestra_sr.sr.id
+    name_label = "${var.vm_name}-disk0"
+    size       = 10 * local.gib
+  }
+
+  wait_for_ip = true
 }
 
 # ---------------------------------------------------------------------------
@@ -112,4 +171,13 @@ output "network" {
 output "existing_vms" {
   description = "VMs currently in the pool, with power state"
   value       = [for vm in data.xenorchestra_vms.pool_vms.vms : "${vm.name_label} (${vm.power_state})"]
+}
+
+output "ubuntu_vm" {
+  description = "The deployed Ubuntu Server 24.04 VM"
+  value = {
+    id             = xenorchestra_vm.ubuntu.id
+    name           = xenorchestra_vm.ubuntu.name_label
+    ipv4_addresses = xenorchestra_vm.ubuntu.ipv4_addresses
+  }
 }
