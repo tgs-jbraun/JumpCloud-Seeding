@@ -11,7 +11,7 @@ resource "hyperv_vhd" "windows" {
   # only adds or removes VMs at the end
   for_each = toset([for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"])
 
-  path   = "${var.vm_path}/${each.key}/${each.key}.vhdx"
+  path   = "${local.vm_path}\\${each.key}\\${each.key}.vhdx"
   source = var.windows_source_vhdx
   size   = 64 * local.gib
 }
@@ -20,7 +20,7 @@ resource "hyperv_machine_instance" "windows" {
   for_each = hyperv_vhd.windows
 
   name  = each.key
-  path  = var.vm_path
+  path  = local.vm_path
   notes = "Tags: jumpcloud-lab. Windows 11 JumpCloud test VM - managed by Terraform"
 
   # Windows 11 requires UEFI (Generation 2)

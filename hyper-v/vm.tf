@@ -18,6 +18,10 @@
 locals {
   gib = 1024 * 1024 * 1024
 
+  # The provider reads host paths back with backslashes, so build them that
+  # way. Forward slashes make apply fail with "produced an invalid new value".
+  vm_path = replace(var.vm_path, "/", "\\")
+
   # e.g. ubuntu-2404-01 => { lab_mac = "02:63:00:00:00:0b", hyperv_mac = "02630000000B" }
   # Same MACs as the XO deployment. The fixed MAC lets netplan match the NIC
   # and gives a stable key for DHCP reservations on pfSense.
@@ -36,7 +40,7 @@ locals {
 resource "hyperv_vhd" "ubuntu" {
   for_each = local.ubuntu_vms
 
-  path   = "${var.vm_path}/${each.key}/${each.key}.vhdx"
+  path   = "${local.vm_path}\\${each.key}\\${each.key}.vhdx"
   source = var.ubuntu_source_vhdx
   size   = 10 * local.gib
 }
@@ -91,7 +95,7 @@ resource "hyperv_iso_image" "ubuntu_cidata" {
   volume_name               = "CIDATA"
   source_zip_file_path      = data.archive_file.ubuntu_cidata[each.key].output_path
   source_zip_file_path_hash = data.archive_file.ubuntu_cidata[each.key].output_sha
-  destination_iso_file_path = "${var.vm_path}/${each.key}/cidata.iso"
+  destination_iso_file_path = "${local.vm_path}\\${each.key}\\cidata.iso"
   iso_media_type            = "cdrom"
   iso_file_system_type      = "iso9660|joliet"
 
@@ -103,7 +107,7 @@ resource "hyperv_machine_instance" "ubuntu" {
   for_each = local.ubuntu_vms
 
   name  = each.key
-  path  = var.vm_path
+  path  = local.vm_path
   notes = "Tags: jumpcloud-lab. Ubuntu Server 24.04 - managed by Terraform"
 
   generation      = 2

@@ -48,6 +48,6 @@ $existing = Invoke-Command -ComputerName $HyperVHost -Port 5986 -UseSSL `
 }
 
 if (-not $existing) { Write-Host 'Nothing to import.'; return }
-$existing | ForEach-Object { "import {`n  to = $($_.Address)`n  id = `"$($_.Id)`"`n}`n" } | Set-Content imports.tf
+$existing | ForEach-Object { "import {`n  to = $($_.Address)`n  id = `"$($_.Id -replace '\\', '\\')`"`n}`n" } | Set-Content imports.tf
 Write-Host "Wrote imports.tf with $(@($existing).Count) import block(s):"
 $existing | ForEach-Object { "  $($_.Address)" }

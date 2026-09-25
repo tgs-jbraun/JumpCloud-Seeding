@@ -7,14 +7,14 @@
 # System > Advanced > Networking > "Disable hardware checksum offload", then
 # reboot pfSense.
 resource "hyperv_vhd" "pfsense" {
-  path   = "${var.vm_path}/pfSense/pfSense.vhdx"
+  path   = "${local.vm_path}\\pfSense\\pfSense.vhdx"
   source = var.pfsense_source_vhdx
   size   = 20 * local.gib
 }
 
 resource "hyperv_machine_instance" "pfsense" {
   name  = "pfSense"
-  path  = var.vm_path
+  path  = local.vm_path
   notes = "Tags: jumpcloud-lab. pfSense 2.9 firewall for the JumpCloud lab - managed by Terraform"
 
   generation      = 2
