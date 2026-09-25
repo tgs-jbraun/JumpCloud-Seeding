@@ -24,8 +24,17 @@ if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "N
 $configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
 if (-not $configs) { throw "No exported VMs found under $Source" }
 
+# Built-in terminal progress bar: one bar across all VMs, the current step below it
+$i = 0
+function Show-Step($step) {
+  Write-Progress -Activity 'Importing golden VMs' -PercentComplete (100 * ($i - 1) / @($configs).Count) `
+    -Status "VM $i of $(@($configs).Count): $($config.Directory.Parent.Name)" -CurrentOperation $step
+}
+
 foreach ($config in $configs) {
+  $i++
   try {
+    Show-Step 'Checking the export'
     $report = Compare-VM -Path $config.FullName -Copy -GenerateNewId
     $name = $report.VM.Name
     $newName = "${name}_JumpCloud_Lab_${UserName}"
@@ -47,7 +56,9 @@ foreach ($config in $configs) {
       continue
     }
 
+    Show-Step 'Copying the VM and its disks (can take several minutes)'
     $vm = Import-VM -CompatibilityReport $report
+    Show-Step "Renaming to $newName and starting"
     Rename-VM -VM $vm -NewName $newName
     Start-VM -VM $vm
     Write-Host "Imported $name and started it as $newName"
@@ -56,3 +67,4 @@ foreach ($config in $configs) {
     Write-Warning "Failed $($config.FullName): $_"
   }
 }
+Write-Progress -Activity 'Importing golden VMs' -Completed
