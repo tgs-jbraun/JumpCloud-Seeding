@@ -9,10 +9,9 @@ from inside the folder for your hypervisor.
 | Folder | Hypervisor | Provider |
 |---|---|---|
 | [`xo/`](xo) | XCP-ng with Xen Orchestra | `vatesfr/xenorchestra` |
-| [`hyper-v/`](hyper-v) | Microsoft Hyper-V: lab switch and Windows 11 VMs | `taliesins/hyperv` |
 
 ```bash
-cd xo        # or: cd hyper-v
+cd xo
 copy terraform.tfvars.example terraform.tfvars   # then fill in real values
 terraform init
 terraform plan
