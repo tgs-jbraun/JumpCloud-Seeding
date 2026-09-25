@@ -96,10 +96,14 @@ resource "hyperv_iso_image" "ubuntu_cidata" {
   source_zip_file_path      = data.archive_file.ubuntu_cidata[each.key].output_path
   source_zip_file_path_hash = data.archive_file.ubuntu_cidata[each.key].output_sha
   destination_iso_file_path = "${local.vm_path}\\${each.key}\\cidata.iso"
+
+  # Upload the zip next to the ISO. The default, $env:TEMP, keeps it after
+  # create, and a zip left there by a failed apply blocks every later create.
+  destination_zip_file_path = "${local.vm_path}\\${each.key}\\cidata.zip"
   iso_media_type            = "cdrom"
   iso_file_system_type      = "iso9660|joliet"
 
-  # Wait for the disk copy, which creates the VM folder the ISO goes in
+  # Wait for the disk copy, which creates the VM folder the zip and ISO go in
   depends_on = [hyperv_vhd.ubuntu]
 }
 
