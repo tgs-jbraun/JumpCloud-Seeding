@@ -1,6 +1,6 @@
 # pfSense interfaces enumerate in the order below:
-#   hn0 = Default Switch    (pfSense WAN, DHCP from the host's NAT)
-#   hn1 = jumpcloud-lab-net (pfSense LAN, 192.168.1.1/24 with DHCP)
+#   hn0 = Lab-External-vSwitch (pfSense WAN)
+#   hn1 = jumpcloud-lab-net   (pfSense LAN, 192.168.1.1/24 with DHCP)
 #
 # MANUAL STEP after the first apply: disable TX checksum offload. Hyper-V has
 # no per-NIC TX checksumming setting like XO, so do it in pfSense:
@@ -34,7 +34,7 @@ resource "hyperv_machine_instance" "pfsense" {
     }
   }
 
-  # NIC 0: Default Switch (WAN)
+  # NIC 0: Lab-External-vSwitch (WAN)
   network_adaptors {
     name         = "wan"
     switch_name  = data.hyperv_network_switch.default.name
