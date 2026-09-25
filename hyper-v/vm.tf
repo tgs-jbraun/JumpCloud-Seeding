@@ -4,9 +4,9 @@
 # RAM, 64 GiB disk each).
 #
 # Hyper-V has no templates, so each VM boots from a copy of a source VHDX,
-# grown to the target size. Growing the disk doesn't grow the partition:
-# Ubuntu's cloud-init does that itself; Windows and pfSense need it done in
-# the guest.
+# grown to the target size. Growing the disk doesn't grow the partition.
+# Ubuntu's cloud-init grows it on first boot. On Windows and pfSense, extend
+# it in the guest.
 #
 # Usage:
 #   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
@@ -88,7 +88,7 @@ resource "hyperv_iso_image" "ubuntu_cidata" {
   iso_media_type            = "cdrom"
   iso_file_system_type      = "iso9660|joliet"
 
-  # The disk copy creates the VM's folder that the ISO is written into
+  # Wait for the disk copy, which creates the VM folder the ISO goes in
   depends_on = [hyperv_vhd.ubuntu]
 }
 

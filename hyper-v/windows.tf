@@ -2,13 +2,13 @@
 # (no LAN NIC), so they get their addresses from pfSense's LAN DHCP.
 #
 # Names are Hyper-V VM names only. Windows computer names are limited to 15
-# characters, so these are not applied as hostnames.
+# characters, so Terraform doesn't set them as hostnames.
 #
 # vTPM: the provider never adds a vTPM, so these VMs start without one, which
-# avoids the known Windows 11 vTPM errors from the XO deployment.
+# avoids the Windows 11 vTPM errors seen on XO.
 resource "hyperv_vhd" "windows" {
-  # JUMPCLOUD-TEST-1, -2, ...; keyed by name, so changing windows_vm_count
-  # only adds/removes VMs at the end
+  # JUMPCLOUD-TEST-1, -2, ... Keyed by name, so changing windows_vm_count
+  # only adds or removes VMs at the end
   for_each = toset([for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"])
 
   path   = "${var.vm_path}/${each.key}/${each.key}.vhdx"

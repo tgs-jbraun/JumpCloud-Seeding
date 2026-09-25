@@ -29,11 +29,6 @@ variable "vm_path" {
   description = "Folder on the Hyper-V host for VM files and disks, e.g. D:/Hyper-V (stands in for the my-storage-repository SR)"
 }
 
-variable "lan_switch_name" {
-  type        = string
-  description = "Existing external virtual switch trunked to the LAN; pfSense's WAN adapter is tagged WAN on it"
-}
-
 variable "ubuntu_source_vhdx" {
   type        = string
   description = "Path on the host to the Ubuntu Server 24.04 cloud image VHDX (stands in for the XO template)"
@@ -51,7 +46,7 @@ variable "windows_source_vhdx" {
 
 variable "vm_name" {
   type        = string
-  description = "Name prefix for the Ubuntu VMs; each gets a -01, -02, ... suffix"
+  description = "Name prefix for the Ubuntu VMs, which get a -01, -02, ... suffix"
 }
 
 variable "vm_count" {

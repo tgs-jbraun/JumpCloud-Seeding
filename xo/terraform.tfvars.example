@@ -1,5 +1,5 @@
 # Copy to terraform.tfvars and fill in real values.
-# terraform.tfvars is git-ignored; this example file is committed.
+# Git ignores terraform.tfvars and tracks this example file.
 
 xoa_url      = "wss://xo.example.local"
 xoa_user     = "admin@example.local"

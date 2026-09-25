@@ -2,15 +2,15 @@
 # so they get their addresses from pfSense's LAN DHCP.
 #
 # Names are XO name labels only. Windows computer names are limited to 15
-# characters, so these are not applied as hostnames.
+# characters, so Terraform doesn't set them as hostnames.
 #
-# vTPM: a vTPM is known to cause errors with Windows 11 VMs on XO, and the
-# provider has no setting to remove one. Clones inherit the template's vTPM
+# vTPM: a vTPM causes errors with Windows 11 VMs on XO, and the provider has
+# no setting to remove one. Clones inherit the template's vTPM
 # and these VMs start right after creation, so keep the template itself free
 # of a vTPM (XO > template > Advanced tab).
 resource "xenorchestra_vm" "windows" {
-  # JUMPCLOUD-TEST-1, -2, ...; keyed by name, so changing windows_vm_count
-  # only adds/removes VMs at the end
+  # JUMPCLOUD-TEST-1, -2, ... Keyed by name, so changing windows_vm_count
+  # only adds or removes VMs at the end
   for_each = toset([for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"])
 
   name_label       = each.key

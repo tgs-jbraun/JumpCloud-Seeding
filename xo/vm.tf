@@ -12,12 +12,12 @@
 locals {
   gib = 1024 * 1024 * 1024
 
-  # jumpcloud-lab-net subnet; pfSense LAN is 192.168.1.1 and serves DHCP here
+  # jumpcloud-lab-net subnet. pfSense (192.168.1.1) serves DHCP on it.
   lab_net_cidr = "192.168.1.0/24"
 
   # e.g. ubuntu-2404-01 => { lab_mac = "02:63:00:00:00:0b" }, -02 gets :0c, ...
   # A fixed, locally administered MAC lets the netplan config below match the
-  # NIC reliably, whatever name the guest kernel gives it. It also gives a
+  # NIC, whatever name the guest kernel gives it. It also gives a
   # stable key for DHCP reservations on pfSense.
   ubuntu_vms = {
     for i in range(var.vm_count) : format("%s-%02d", var.vm_name, i + 1) => {
@@ -27,7 +27,7 @@ locals {
 }
 
 resource "xenorchestra_vm" "ubuntu" {
-  # Keyed by name, so changing vm_count only adds/removes VMs at the end
+  # Keyed by name, so changing vm_count only adds or removes VMs at the end
   for_each = local.ubuntu_vms
 
   name_label       = each.key

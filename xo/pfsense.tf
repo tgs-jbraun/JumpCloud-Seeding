@@ -1,10 +1,10 @@
-# pfSense does not use cloud-init; assign interfaces and IPs from the VM
+# pfSense doesn't use cloud-init. Assign interfaces and IPs from the VM
 # console on first boot. Interfaces enumerate in the order below:
 #   xn0 = LAN   (pfSense WAN)
 #   xn1 = jumpcloud-lab-net (pfSense LAN)
 #
-# MANUAL STEP after the first apply - TX checksum offload must be disabled on
-# both interfaces, and the provider has no setting for it:
+# MANUAL STEP after the first apply: disable TX checksum offload on both
+# interfaces. The provider has no setting for it.
 #   1. In XO, open the pfSense VM > Network tab.
 #   2. For each of the two interfaces, turn off "TX checksumming".
 #   3. Restart the VM so the change takes effect.

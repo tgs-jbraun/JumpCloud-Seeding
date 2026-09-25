@@ -1,7 +1,7 @@
-# Existing external switch that trunks to the LAN. Fails the plan if it's
-# missing. The WAN tag is set on pfSense's WAN adapter.
-data "hyperv_network_switch" "lan" {
-  name = var.lan_switch_name
+# The host's built-in NAT switch, used for pfSense's WAN. The plan fails if
+# it's missing.
+data "hyperv_network_switch" "default" {
+  name = "Default Switch"
 }
 
 # Stands in for the XO SDN private network. A Hyper-V Private switch only

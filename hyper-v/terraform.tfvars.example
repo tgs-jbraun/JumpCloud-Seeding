@@ -1,5 +1,5 @@
 # Copy to terraform.tfvars and fill in real values.
-# terraform.tfvars is git-ignored; this example file is committed.
+# Git ignores terraform.tfvars and tracks this example file.
 
 hyperv_host     = "hyperv01.example.local"
 hyperv_user     = "Administrator"
@@ -7,9 +7,8 @@ hyperv_password = "CHANGE_ME"
 hyperv_https    = true
 hyperv_insecure = true
 
-# Host storage and networks
-vm_path         = "D:/Hyper-V/jumpcloud-lab"
-lan_switch_name = "LAN Trunk" # external switch; pfSense WAN is tagged WAN
+# Host storage
+vm_path = "D:/Hyper-V/jumpcloud-lab"
 
 # Source VHDX images, copied per VM and grown to 10 / 20 / 64 GiB
 ubuntu_source_vhdx  = "D:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx"

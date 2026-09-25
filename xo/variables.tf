@@ -21,7 +21,7 @@ variable "xoa_insecure" {
 
 variable "vm_name" {
   type        = string
-  description = "Name prefix for the Ubuntu VMs; each gets a -01, -02, ... suffix"
+  description = "Name prefix for the Ubuntu VMs, which get a -01, -02, ... suffix"
 }
 
 variable "vm_count" {
