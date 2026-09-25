@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is git-ignored; this example file is committed.
+
+hyperv_host     = "hyperv01.example.local"
+hyperv_user     = "Administrator"
+hyperv_password = "CHANGE_ME"
+hyperv_https    = true
+hyperv_insecure = true
+
+# Host storage and networks
+vm_path         = "D:/Hyper-V/jumpcloud-lab"
+lan_switch_name = "LAN Trunk" # external switch; pfSense WAN is tagged WAN
+
+# Source VHDX images, copied per VM and grown to 10 / 20 / 64 GiB
+ubuntu_source_vhdx  = "D:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx"
+pfsense_source_vhdx = "D:/Hyper-V/Golden/pfsense-2.6.vhdx"
+windows_source_vhdx = "D:/Hyper-V/Golden/win11-jumpcloud.vhdx" # sysprepped
+
+# Ubuntu Server 24.04 VMs
+vm_name           = "ubuntu-2404" # prefix: VMs become ubuntu-2404-01, -02, ...
+vm_count          = 3
+vm_ssh_public_key = "" # e.g. "ssh-ed25519 AAAA... you@host"
+
+# Windows 11 JumpCloud VMs (JUMPCLOUD-TEST-1, -2, ...)
+windows_vm_count = 3
