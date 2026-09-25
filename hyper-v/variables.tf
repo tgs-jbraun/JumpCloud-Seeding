@@ -29,40 +29,9 @@ variable "vm_path" {
   description = "Local folder on the Hyper-V host for VM files and disks, e.g. F:/Hyper-V/Virtual-Hard-Disks"
 }
 
-variable "ubuntu_source_vhdx" {
-  type        = string
-  description = "Path on the host to ubuntu-24.04-server-cloudimg-amd64.img converted to VHDX (see vm.tf)"
-}
-
-variable "pfsense_source_vhdx" {
-  type        = string
-  description = "Path on the host to the pfSense 2.6 golden VHDX (stands in for the XO template)"
-}
-
 variable "windows_source_vhdx" {
   type        = string
   description = "Path on the host to the sysprepped Windows 11 JumpCloud golden VHDX (stands in for the XO template)"
-}
-
-variable "vm_name" {
-  type        = string
-  description = "Name prefix for the Ubuntu VMs, which get a -01, -02, ... suffix"
-}
-
-variable "vm_count" {
-  type        = number
-  description = "Number of Ubuntu VMs to deploy"
-
-  validation {
-    # MAC suffixes start at 0x0b, so at most 244 VMs fit before 0xff
-    condition     = var.vm_count >= 1 && var.vm_count <= 244 && floor(var.vm_count) == var.vm_count
-    error_message = "vm_count must be a whole number from 1 to 244."
-  }
-}
-
-variable "vm_ssh_public_key" {
-  type        = string
-  description = "SSH public key for the default ubuntu user (empty string to skip)"
 }
 
 variable "windows_vm_count" {

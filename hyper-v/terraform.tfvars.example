@@ -10,15 +10,8 @@ hyperv_insecure = true
 # Host storage
 vm_path = "F:/Hyper-V/Virtual-Hard-Disks"
 
-# Source VHDX images, copied per VM and grown to 10 / 20 / 64 GiB
-ubuntu_source_vhdx  = "F:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx" # from the noble .img, see vm.tf
-pfsense_source_vhdx = "D:/Hyper-V/Golden/pfsense-2.6.vhdx"
-windows_source_vhdx = "D:/Hyper-V/Golden/win11-jumpcloud.vhdx" # sysprepped
-
-# Ubuntu Server 24.04 VMs
-vm_name           = "ubuntu-2404" # prefix: VMs become ubuntu-2404-01, -02, ...
-vm_count          = 3
-vm_ssh_public_key = "" # e.g. "ssh-ed25519 AAAA... you@host"
+# Sysprepped Windows 11 golden image, copied per VM and grown to 64 GiB
+windows_source_vhdx = "D:/Hyper-V/Golden/win11-jumpcloud.vhdx"
 
 # Windows 11 JumpCloud VMs (JUMPCLOUD-TEST-1, -2, ...)
 windows_vm_count = 3

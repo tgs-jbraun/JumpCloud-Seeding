@@ -6,11 +6,6 @@ terraform {
       source  = "taliesins/hyperv"
       version = "~> 1.2"
     }
-    # Zips the cloud-init seed files for the Ubuntu VMs
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
   }
 }
 

@@ -1,3 +1,23 @@
+# Terraform half of the Hyper-V lab: the jumpcloud-lab-net switch and
+# windows_vm_count Windows 11 JumpCloud VMs (4 vCPU, 4 GiB RAM, 64 GiB disk).
+# Ubuntu and pfSense are in hyperdeploy/, which only builds Generation 1 VMs,
+# while Windows 11 needs Generation 2. Apply this first: the HyperDeploy VMs
+# connect to jumpcloud-lab-net.
+#
+# Usage:
+#   copy terraform.tfvars.example terraform.tfvars   # then fill in real values
+#   terraform init
+#   terraform plan
+#   terraform apply
+
+locals {
+  gib = 1024 * 1024 * 1024
+
+  # The provider reads host paths back with backslashes, so build them that
+  # way. Forward slashes make apply fail with "produced an invalid new value".
+  vm_path = replace(var.vm_path, "/", "\\")
+}
+
 # Built from the sysprepped Windows 11 JumpCloud golden VHDX, lab network only
 # (no LAN NIC), so they get their addresses from pfSense's LAN DHCP.
 #

@@ -9,7 +9,8 @@ from inside the folder for your hypervisor.
 | Folder | Hypervisor | Provider |
 |---|---|---|
 | [`xo/`](xo) | XCP-ng with Xen Orchestra | `vatesfr/xenorchestra` |
-| [`hyper-v/`](hyper-v) | Microsoft Hyper-V | `taliesins/hyperv` |
+| [`hyper-v/`](hyper-v) | Microsoft Hyper-V: lab switch and Windows 11 VMs | `taliesins/hyperv` |
+| [`hyper-v/hyperdeploy/`](hyper-v/hyperdeploy) | Microsoft Hyper-V: Ubuntu and pfSense VMs | HyperDeploy (PowerShell), not Terraform |
 
 ```bash
 cd xo        # or: cd hyper-v
@@ -19,4 +20,12 @@ terraform plan
 terraform apply
 ```
 
-Each folder's `.tf` files list the manual steps that Terraform can't do.
+On Hyper-V, apply `hyper-v/` first (it creates the lab switch), then from
+`hyper-v/hyperdeploy/` run:
+
+```powershell
+Install-Module -Name HyperDeploy
+Publish-HyperDeploy -DefinitionFile .\definition.json
+```
+
+Each folder's files list the manual steps that the tools can't do.
