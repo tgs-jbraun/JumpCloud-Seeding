@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.3"
+  required_version = ">= 1.5" # import blocks (import-existing.ps1)
 
   required_providers {
     hyperv = {
