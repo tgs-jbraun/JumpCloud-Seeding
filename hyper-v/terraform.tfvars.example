@@ -8,7 +8,7 @@ hyperv_https    = true
 hyperv_insecure = true
 
 # Host storage
-vm_path = "D:/Hyper-V/jumpcloud-lab"
+vm_path = "F:/Hyper-V/Virtual-Hard-Disks"
 
 # Source VHDX images, copied per VM and grown to 10 / 20 / 64 GiB
 ubuntu_source_vhdx  = "D:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx"

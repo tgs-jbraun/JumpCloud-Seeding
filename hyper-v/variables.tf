@@ -26,7 +26,7 @@ variable "hyperv_insecure" {
 
 variable "vm_path" {
   type        = string
-  description = "Folder on the Hyper-V host for VM files and disks, e.g. D:/Hyper-V (stands in for the my-storage-repository SR)"
+  description = "Local folder on the Hyper-V host for VM files and disks, e.g. F:/Hyper-V/Virtual-Hard-Disks"
 }
 
 variable "ubuntu_source_vhdx" {
