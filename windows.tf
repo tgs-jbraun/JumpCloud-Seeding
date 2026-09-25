@@ -5,13 +5,9 @@
 # characters, so these are not applied as hostnames.
 #
 # vTPM: a vTPM is known to cause errors with Windows 11 VMs on XO, and the
-# provider has no setting to remove one. If the template carries a vTPM, each
-# clone inherits it, so the VMs are created powered OFF. MANUAL STEP after
-# each apply that creates a Windows VM:
-#   1. In XO, open the VM > Advanced tab.
-#   2. If a vTPM is listed, delete it.
-#   3. Start the VM.
-# Removing the vTPM from the template itself avoids this step for new VMs.
+# provider has no setting to remove one. Clones inherit the template's vTPM
+# and these VMs start right after creation, so keep the template itself free
+# of a vTPM (XO > template > Advanced tab).
 resource "xenorchestra_vm" "windows" {
   # JUMPCLOUD-TEST-1, -2, ...; keyed by name, so changing windows_vm_count
   # only adds/removes VMs at the end
@@ -37,13 +33,5 @@ resource "xenorchestra_vm" "windows" {
     sr_id      = data.xenorchestra_sr.sr.id
     name_label = "${each.key}-disk0"
     size       = 64 * local.gib
-  }
-
-  # Create powered off so the vTPM can be removed before first boot (see above)
-  power_state = "Halted"
-
-  lifecycle {
-    # After the manual start, don't power the VM back off on later applies
-    ignore_changes = [power_state]
   }
 }
