@@ -31,7 +31,7 @@ variable "vm_path" {
 
 variable "ubuntu_source_vhdx" {
   type        = string
-  description = "Path on the host to the Ubuntu Server 24.04 cloud image VHDX (stands in for the XO template)"
+  description = "Path on the host to ubuntu-24.04-server-cloudimg-amd64.img converted to VHDX (see vm.tf)"
 }
 
 variable "pfsense_source_vhdx" {

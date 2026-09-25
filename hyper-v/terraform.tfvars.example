@@ -11,7 +11,7 @@ hyperv_insecure = true
 vm_path = "F:/Hyper-V/Virtual-Hard-Disks"
 
 # Source VHDX images, copied per VM and grown to 10 / 20 / 64 GiB
-ubuntu_source_vhdx  = "D:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx"
+ubuntu_source_vhdx  = "F:/Hyper-V/Golden/ubuntu-24.04-server-cloudimg-amd64.vhdx" # from the noble .img, see vm.tf
 pfsense_source_vhdx = "D:/Hyper-V/Golden/pfsense-2.6.vhdx"
 windows_source_vhdx = "D:/Hyper-V/Golden/win11-jumpcloud.vhdx" # sysprepped
 

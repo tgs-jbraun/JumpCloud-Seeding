@@ -29,6 +29,10 @@ locals {
   }
 }
 
+# Source: ubuntu-24.04-server-cloudimg-amd64.img (QCOW2) from
+# https://cloud-images.ubuntu.com/releases/noble/release/
+# Convert it to VHDX once on the host before the first apply:
+#   qemu-img convert -f qcow2 -O vhdx -o subformat=dynamic ubuntu-24.04-server-cloudimg-amd64.img ubuntu-24.04-server-cloudimg-amd64.vhdx
 resource "hyperv_vhd" "ubuntu" {
   for_each = local.ubuntu_vms
 
@@ -57,6 +61,9 @@ data "archive_file" "ubuntu_cidata" {
         hostname         = each.key
         manage_etc_hosts = true
         package_update   = true
+        # Hyper-V KVP daemon: reports the VM's IP to the host, which
+        # wait_for_ips below needs. The generic cloud image lacks it.
+        packages = ["linux-cloud-tools-virtual"]
       },
       var.vm_ssh_public_key == "" ? {} : { ssh_authorized_keys = [var.vm_ssh_public_key] }
     ))}"
