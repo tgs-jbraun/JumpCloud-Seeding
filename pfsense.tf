@@ -1,7 +1,3 @@
-# ---------------------------------------------------------------------------
-# pfSense firewall VM
-# ---------------------------------------------------------------------------
-
 # pfSense does not use cloud-init; assign interfaces and IPs from the VM
 # console on first boot. Interfaces enumerate in the order below:
 #   xn0 = LAN   (pfSense WAN)

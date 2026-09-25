@@ -1,7 +1,3 @@
-# ---------------------------------------------------------------------------
-# Windows 11 JumpCloud test VMs
-# ---------------------------------------------------------------------------
-
 # Built from the JumpCloud Windows 11 template, lab network only (no LAN NIC),
 # so they get their addresses from pfSense's LAN DHCP.
 #
@@ -16,14 +12,10 @@
 #   2. If a vTPM is listed, delete it.
 #   3. Start the VM.
 # Removing the vTPM from the template itself avoids this step for new VMs.
-locals {
-  # JUMPCLOUD-TEST-1, JUMPCLOUD-TEST-2, ...
-  windows_vm_names = [for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"]
-}
-
 resource "xenorchestra_vm" "windows" {
-  # Keyed by name, so changing windows_vm_count only adds/removes VMs at the end
-  for_each = toset(local.windows_vm_names)
+  # JUMPCLOUD-TEST-1, -2, ...; keyed by name, so changing windows_vm_count
+  # only adds/removes VMs at the end
+  for_each = toset([for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"])
 
   name_label       = each.key
   name_description = "Windows 11 JumpCloud test VM - managed by Terraform"

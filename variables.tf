@@ -1,7 +1,3 @@
-# ---------------------------------------------------------------------------
-# Variables - values are set in terraform.tfvars (git-ignored)
-# ---------------------------------------------------------------------------
-
 variable "xoa_url" {
   type        = string
   description = "XOA websocket URL (must be ws:// or wss://)"
