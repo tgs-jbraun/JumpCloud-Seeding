@@ -100,7 +100,7 @@ resource "hyperv_iso_image" "ubuntu_cidata" {
   # Upload the zip next to the ISO. The default, $env:TEMP, keeps it after
   # create, and a zip left there by a failed apply blocks every later create.
   destination_zip_file_path = "${local.vm_path}\\${each.key}\\cidata.zip"
-  iso_media_type            = "cdrom"
+  iso_media_type            = "dvdplusrw_duallayer" # IMAPI rejects read-only types like cdrom
   iso_file_system_type      = "iso9660|joliet"
 
   # Wait for the disk copy, which creates the VM folder the zip and ISO go in
