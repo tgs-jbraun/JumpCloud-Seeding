@@ -15,7 +15,7 @@ resource "hyperv_vhd" "pfsense" {
 resource "hyperv_machine_instance" "pfsense" {
   name  = "pfSense"
   path  = var.vm_path
-  notes = "Tags: jumpcloud-lab. pfSense 2.6 firewall for the JumpCloud lab - managed by Terraform"
+  notes = "Tags: jumpcloud-lab. pfSense 2.9 firewall for the JumpCloud lab - managed by Terraform"
 
   generation      = 2
   processor_count = 2
