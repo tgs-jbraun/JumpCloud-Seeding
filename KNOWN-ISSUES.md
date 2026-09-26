@@ -8,7 +8,6 @@ When its fix is merged, move the row to **Fixed** and name the commit.
 | Affects | Issue | Workaround |
 |---|---|---|
 | Windows 11 VMs | The display resolution defaults to 1920x1080. | None yet |
-| pfSense VM | pfSense may take 192.0.2.240 instead of requesting an address from DHCP. | None yet |
 | All VMs | A VM may have no internet connection on first boot. | None yet |
 | Ubuntu VMs | The image is minimized and lacks common tools such as `ping` and `nslookup`. | `sudo apt install iputils-ping dnsutils`, or `sudo unminimize` for the full toolset |
 
