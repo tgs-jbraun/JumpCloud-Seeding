@@ -50,6 +50,10 @@ The remote version walks through these steps in a terminal UI:
    Redeploy or Delete in an arrow-key menu.
 6. Imports each VM with its own progress bar, then shows a results table.
 
+While the disks copy, both scripts show random two-sentence pop-culture facts
+from [`hyper-v/pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt). Each
+fact names its Wikipedia source. Add a line to the file to add a fact.
+
 The comments at the top of each script list all options.
 
 The comments in each folder's files list the manual steps the tools can't do.

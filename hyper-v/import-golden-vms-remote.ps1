@@ -46,6 +46,16 @@ $ErrorActionPreference = 'Stop'
 
 function Esc($text) { Get-SpectreEscapedText -Text "$text" }
 
+# Pop-culture facts shown under the progress bars during the copy, in random
+# order. Each line of the file is "sentence | sentence | source".
+$factsFile = Join-Path $PSScriptRoot 'pop-culture-facts.txt'
+$facts = @(if (Test-Path $factsFile) {
+  Get-Content $factsFile | Where-Object { $_ -and $_ -notmatch '^\s*#' } |
+    ForEach-Object { $s = $_ -split '\s*\|\s*'; [pscustomobject]@{ One = $s[0]; Two = $s[1] } }
+})
+if ($facts) { $facts = @($facts | Get-Random -Count $facts.Count) }
+$nextFact = 0
+
 # --- Steps that run on the Hyper-V host ------------------------------------
 
 # Finds the golden exports, the names they will get, and anything of yours
@@ -248,6 +258,18 @@ try {
     param([Spectre.Console.ProgressContext]$Context)
     $tasks = @{}
     foreach ($p in $plan) { $tasks[$p.NewName] = $Context.AddTask((Esc $p.NewName)) }
+
+    # Two lines under the bars for the current fact, one sentence each
+    $factLines = @(if ($facts) { $Context.AddTask(' '); $Context.AddTask(' ') })
+    $factLines | ForEach-Object { $_.IsIndeterminate = $true }
+    function Show-Fact {
+      if (-not $factLines) { return }
+      $fact = $facts[$script:nextFact++ % $facts.Count]
+      $factLines[0].Description = "[deepskyblue1]Did you know?[/] $(Esc $fact.One)"
+      $factLines[1].Description = "[grey]$(Esc $fact.Two)[/]"
+    }
+    Show-Fact
+
     foreach ($p in $plan) {
       $task = $tasks[$p.NewName]
       try {
@@ -258,7 +280,10 @@ try {
           $task.Value = 100
           continue
         }
-        $id = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir
+        # Run the copy as a job so the fact can change every 15 seconds meanwhile
+        $job = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir -AsJob
+        while (-not (Wait-Job $job -Timeout 15)) { Show-Fact }
+        $id = Receive-Job $job -Wait -AutoRemoveJob
         $task.Increment(80)
         Invoke-Command -Session $Session -ScriptBlock $remoteStart -ArgumentList $id, $p.NewName
         $task.Increment(10)
@@ -269,6 +294,8 @@ try {
         $task.Value = 100
       }
     }
+    # Settle the fact lines so the final frame shows them as done
+    $factLines | ForEach-Object { $_.IsIndeterminate = $false; $_.Value = $_.MaxValue }
   }
   $results | Format-SpectreTable -Title 'Results' -AllowMarkup -Color DeepSkyBlue1
 }

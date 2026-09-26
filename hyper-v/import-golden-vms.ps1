@@ -27,6 +27,9 @@ param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
   [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
+  # Pop-culture facts shown during the copy. Loaded from pop-culture-facts.txt
+  # next to the script, and passed along when the script runs on a remote host.
+  [string[]]$Facts,
   [string]$ComputerName,
   [pscredential]$Credential,
   [switch]$SkipCertificateCheck,
@@ -38,6 +41,13 @@ $ErrorActionPreference = 'Stop'
 $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
+
+# Each line is "sentence | sentence | source". Missing file: no facts, no error.
+$factsFile = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'pop-culture-facts.txt' }
+if (-not $Facts -and $factsFile -and (Test-Path $factsFile)) {
+  $Facts = @(Get-Content $factsFile | Where-Object { $_ -and $_ -notmatch '^\s*#' } |
+    ForEach-Object { $s = $_ -split '\s*\|\s*'; "$($s[0]) $($s[1])" })
+}
 
 # Remote run: send this same script to the host and run it there. It starts
 # without -ComputerName or -Session, so on the host it takes the local path below.
@@ -54,7 +64,7 @@ if ($ComputerName -or $Session) {
     if ($info.AuthenticationMechanism -eq 'Basic' -and $info.Scheme -ne 'https') {
       throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
     }
-    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination
+    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination, $Facts
   }
   finally {
     if ($ownSession) { Remove-PSSession $Session }
@@ -149,6 +159,15 @@ if ($existing -or $folders) {
   if ($answer -eq 1) { return }
 }
 
+# Pop-culture facts to read while the disks copy, in random order
+if ($Facts) { $Facts = @($Facts | Get-Random -Count $Facts.Count) }
+$nextFact = 0
+function Show-Fact {
+  if (-not $Facts) { return }
+  $fact = $Facts[$script:nextFact++ % $Facts.Count]
+  Write-Host "  Did you know? $fact" -ForegroundColor DarkCyan
+}
+
 # Built-in terminal progress bar: one bar across all VMs, the current step below it
 $i = 0
 function Show-Step($step) {
@@ -182,7 +201,13 @@ foreach ($p in $plan) {
     }
 
     Show-Step 'Copying the VM and its disks (can take several minutes)'
-    $vm = Import-VM @import
+    # Run the copy as a job so a new fact can show every 20 seconds meanwhile
+    $job = Import-VM @import -AsJob
+    while ($job.State -in 'NotStarted', 'Running') {
+      Show-Fact
+      Wait-Job $job -Timeout 20 | Out-Null
+    }
+    $vm = Receive-Job $job -Wait -AutoRemoveJob
 
     # Confirm nothing still points at the golden export or a default location
     $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +

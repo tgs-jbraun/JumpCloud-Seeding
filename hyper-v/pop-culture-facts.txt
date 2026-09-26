@@ -1,0 +1,29 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+#
+# Pop-culture facts the import scripts show while VMs copy.
+# One fact per line: first sentence | second sentence | source.
+# Keep each fact to two sentences, paraphrased (not copied) from the source.
+# Lines starting with # are ignored.
+
+Star Wars (1977) overtook Jaws to become the highest-grossing film of its time. | It kept that record until E.T. the Extra-Terrestrial arrived in 1982. | https://en.wikipedia.org/wiki/Star_Wars_(film)
+The Friends series finale aired on NBC on May 6, 2004. | About 52.5 million viewers in the United States watched it that night. | https://en.wikipedia.org/wiki/The_Last_One_(Friends)
+Jurassic Park (1993) built its dinosaur sounds from a mix of real animal noises. | Steven Spielberg invested in the DTS digital sound format to show them off in theaters. | https://en.wikipedia.org/wiki/Jurassic_Park_(film)
+Most publishers thought the first Harry Potter manuscript was too long. | Bloomsbury published it in June 1997 with a first hardback print run of only 500 copies. | https://en.wikipedia.org/wiki/Harry_Potter_and_the_Philosopher%27s_Stone
+Pac-Man was designed by Toru Iwatani and released by Namco in 1980. | Its name comes from "paku-paku", a Japanese expression for the sound of munching. | https://en.wikipedia.org/wiki/Pac-Man
+Mario made his first appearance in the 1981 arcade game Donkey Kong. | In that game he was called Jumpman, and he worked as a carpenter rather than a plumber. | https://en.wikipedia.org/wiki/Mario
+Tetris was created in 1984 by Alexey Pajitnov, a computer engineer in Moscow. | He built it at the Soviet Academy of Sciences, and it spread worldwide from there. | https://en.wikipedia.org/wiki/Tetris
+The Simpsons began as short cartoons on The Tracey Ullman Show in 1987. | The half-hour series premiered in December 1989 and became the longest-running American scripted primetime series. | https://en.wikipedia.org/wiki/The_Simpsons
+Toy Story (1995) was the first feature film animated entirely by computer. | It was also the first feature film from Pixar. | https://en.wikipedia.org/wiki/Toy_Story
+Minecraft is the best-selling video game of all time, with more than 300 million copies sold. | Microsoft bought its developer, Mojang, in 2014 for 2.5 billion US dollars. | https://en.wikipedia.org/wiki/Minecraft
+Nintendo was founded in 1889 to make hanafuda playing cards. | It moved into video games almost a century later. | https://en.wikipedia.org/wiki/Nintendo
+Paul McCartney said the melody of "Yesterday" came to him in a dream. | Until he wrote the real lyrics, its working title was "Scrambled Eggs". | https://en.wikipedia.org/wiki/Yesterday_(Beatles_song)
+In L. Frank Baum's book, Dorothy's magic slippers are silver. | The 1939 film made them ruby red to show off its Technicolor. | https://en.wikipedia.org/wiki/Ruby_slippers
+Erno Rubik, a Hungarian architecture professor, invented the Rubik's Cube in 1974. | It went on to become one of the best-selling puzzle games in history. | https://en.wikipedia.org/wiki/Rubik%27s_Cube
+The Lord of the Rings: The Return of the King won all 11 Academy Awards it was nominated for. | That tied the record for the most Oscars won by one film, shared with Ben-Hur and Titanic. | https://en.wikipedia.org/wiki/The_Lord_of_the_Rings:_The_Return_of_the_King
+Michael Jackson's Thriller (1982) is the best-selling album of all time. | Estimates put its worldwide sales at about 70 million copies. | https://en.wikipedia.org/wiki/Thriller_(album)
+Eric Stoltz was originally cast as Marty McFly in Back to the Future. | Michael J. Fox replaced him after several weeks of filming. | https://en.wikipedia.org/wiki/Back_to_the_Future
+The first video on YouTube, "Me at the zoo", was uploaded on April 23, 2005. | It shows co-founder Jawed Karim in front of the elephants at the San Diego Zoo. | https://en.wikipedia.org/wiki/Me_at_the_zoo
+Pokemon creator Satoshi Tajiri was inspired by his childhood hobby of collecting insects. | The first games, Pocket Monsters Red and Green, came out in Japan in 1996. | https://en.wikipedia.org/wiki/Pok%C3%A9mon
+The mechanical shark in Jaws (1975) was nicknamed "Bruce" after Steven Spielberg's lawyer. | It broke down so often that Spielberg showed the shark less, which made the film more suspenseful. | https://en.wikipedia.org/wiki/Jaws_(film)
+Doctor Who first aired on the BBC in 1963. | The idea of regeneration was introduced in 1966 so a new actor could replace William Hartnell. | https://en.wikipedia.org/wiki/Doctor_Who
+Sega created Sonic the Hedgehog in 1991 as a mascot to compete with Nintendo's Mario. | He debuted that year in the game Sonic the Hedgehog for the Sega Genesis. | https://en.wikipedia.org/wiki/Sonic_the_Hedgehog
