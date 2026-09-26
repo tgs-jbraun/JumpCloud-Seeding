@@ -71,15 +71,24 @@ $plan = foreach ($config in $configs) {
   [pscustomobject]@{ Config = $config; Name = $name; NewName = "${name}_JumpCloud_Lab_${UserName}" }
 }
 
-# Pre-deployment check: VMs you already have with the same names, and
-# destination folders left without a VM (for example by a failed import)
-$existing = @(Get-VM -Name $plan.NewName -ErrorAction SilentlyContinue)
-$folders = @($plan.NewName | Where-Object { $existing.Name -notcontains $_ } |
-  ForEach-Object { Join-Path $Destination $_ } | Where-Object { Test-Path $_ })
+# Pre-deployment check. A VM counts as yours if it has a planned name, or if
+# its files live in a planned destination folder: an interrupted run can
+# leave a VM there still under its golden name, and Hyper-V keeps its files
+# locked until the VM itself is deleted.
+$dirs = @($plan.NewName | ForEach-Object { Join-Path $Destination $_ })
+function Test-InLabFolder($path) {
+  $path -and ($dirs | Where-Object { "$path\".StartsWith("$_\", [StringComparison]::OrdinalIgnoreCase) })
+}
+$existing = @(Get-VM | Where-Object { $plan.NewName -contains $_.Name -or (Test-InLabFolder $_.Path) })
+# Folders left with no VM in them, for example by a failed import
+$folders = @(foreach ($dir in $dirs) {
+  $inUse = $existing | Where-Object { "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
+  if ((Test-Path $dir) -and -not $inUse) { $dir }
+})
 if ($existing -or $folders) {
   if ($existing) {
     Write-Host "You already have these VMs:"
-    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State))" }
+    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State)) in $($_.Path)" }
   }
   if ($folders) {
     Write-Host "These destination folders already exist:"
@@ -125,13 +134,12 @@ if ($existing -or $folders) {
 
     # 4. Remove-VM keeps the virtual disks and folder, so delete them last
     $disks | Where-Object { $_ -and (Test-Path $_) } | Remove-Item -Force
-    $dir = Join-Path $Destination $vm.Name
-    if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     Write-Host "Deleted $($vm.Name)"
   }
-  foreach ($folder in $folders) {
-    Remove-Item $folder -Recurse -Force
-    Write-Host "Deleted folder $folder"
+  # Every VM using these folders is gone now, so nothing holds their files
+  foreach ($dir in $dirs | Where-Object { Test-Path $_ }) {
+    Remove-Item $dir -Recurse -Force
+    Write-Host "Deleted folder $dir"
   }
   Write-Progress -Activity 'Deleting existing VMs' -Completed
   if ($answer -eq 1) { return }
