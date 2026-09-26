@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 # Deploys vm_count Ubuntu Server 24.04 cloud-init VMs (2 vCPU, 4 GiB RAM, 10 GiB disk each)
 # plus a pfSense 2.6 firewall VM (2 vCPU, 2 GiB RAM, 20 GiB template-default disk)
 # and windows_vm_count Windows 11 JumpCloud VMs (4 vCPU, 4 GiB RAM, 64 GiB disk each).

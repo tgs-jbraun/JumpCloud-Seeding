@@ -1,6 +1,8 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 # Imports every Hyper-V VM exported under C:\Users\Public\Documents\Hyper-V\Golden, renames it to
-# <name>_JumpCloud_Lab_<your name>, then starts it. Each VM is imported as a
-# copy with a new ID, so the golden exports stay untouched.
+# <name>_JumpCloud_Lab_<your name>, then starts it. It imports each VM as a copy
+# with a new ID, so the golden exports stay untouched.
 #
 # If you already have VMs with those names, it asks whether to redeploy them,
 # delete them, or cancel before it changes anything.
@@ -17,8 +19,8 @@
 #     .\import-golden-vms.ps1 -ComputerName hyperv01 -Credential (Get-Credential)
 #     .\import-golden-vms.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert
 #
-#   Remotely, over a PSSession you already opened. It must be encrypted
-#   (HTTPS, Kerberos or NTLM), so Basic auth over HTTP is refused:
+#   Remotely, over a PSSession you already opened. HTTPS, Kerberos and NTLM
+#   sessions are encrypted. The script refuses Basic auth over HTTP:
 #     $s = New-PSSession -ComputerName hyperv01 -UseSSL
 #     .\import-golden-vms.ps1 -Session $s
 param(
@@ -34,7 +36,7 @@ $ErrorActionPreference = 'Stop'
 
 # The name also becomes part of each VM's folder, so keep it path-safe
 $UserName = $UserName.Trim() -replace '\s+', '-'
-if (-not $UserName) { throw 'A name is required' }
+if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
 
 # Remote run: send this same script to the host and run it there. It starts
@@ -72,9 +74,9 @@ $plan = foreach ($config in $configs) {
 }
 
 # Pre-deployment check. A VM counts as yours if it has a planned name, or if
-# its files live in a planned destination folder: an interrupted run can
-# leave a VM there still under its golden name, and Hyper-V keeps its files
-# locked until the VM itself is deleted.
+# its files live in a planned destination folder. An interrupted run can
+# leave a VM there under its golden name. Hyper-V keeps that VM's files locked
+# until the VM itself is deleted.
 $dirs = @($plan.NewName | ForEach-Object { Join-Path $Destination $_ })
 function Test-InLabFolder($path) {
   $path -and ($dirs | Where-Object { "$path\".StartsWith("$_\", [StringComparison]::OrdinalIgnoreCase) })
@@ -101,7 +103,7 @@ if ($existing -or $folders) {
     New-Object System.Management.Automation.Host.ChoiceDescription '&Cancel', 'Stop without changing anything'
   )
   $answer = $Host.UI.PromptForChoice('Existing lab found', 'What do you want to do?', $choices, 2)
-  if ($answer -eq 2) { Write-Host 'Cancelled. Nothing was changed.'; return }
+  if ($answer -eq 2) { Write-Host 'Cancelled. Nothing changed.'; return }
 
   # Waits up to 5 minutes for a Hyper-V state change to finish
   function Wait-Until($what, [scriptblock]$done) {
@@ -116,7 +118,7 @@ if ($existing -or $folders) {
     Write-Progress -Activity 'Deleting existing VMs' -Status $vm.Name
     $disks = @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path)
 
-    # 1. Power off through Hyper-V. A saved state has to be discarded first.
+    # 1. Power off through Hyper-V. Discard a saved state first.
     if ($vm.State -eq 'Saved') { Remove-VMSavedState -VM $vm }
     if ((Get-VM -Id $vm.Id).State -ne 'Off') {
       Stop-VM -VM $vm -TurnOff -Force
@@ -156,9 +158,9 @@ foreach ($p in $plan) {
   $i++
   try {
     Show-Step 'Checking the export'
-    # Copy import (never in-place registration), with every file written under
-    # this VM's destination folder. Import-VM's Copy parameter set takes these
-    # paths directly. Its CompatibilityReport set takes no paths at all.
+    # Copy the VM (never register it in place) and write every file under this
+    # VM's destination folder. Only Import-VM's Copy parameter set takes these
+    # paths. Its CompatibilityReport set takes none.
     $dir = Join-Path $Destination $p.NewName
     $import = @{
       Path                = $p.Config.FullName
@@ -186,7 +188,7 @@ foreach ($p in $plan) {
       Where-Object { $_ -and -not $_.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
     if ($outside) {
       Remove-VM -VM $vm -Force
-      throw "imported files landed outside ${dir}: $($outside -join ', '). Removed the VM."
+      throw "imported files are outside ${dir}: $($outside -join ', '). Removed the VM."
     }
 
     Show-Step "Renaming to $($p.NewName) and starting"

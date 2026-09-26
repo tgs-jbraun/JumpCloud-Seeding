@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 output "ubuntu_vms" {
   description = "The deployed Ubuntu Server 24.04 VMs, keyed by name"
   value = {

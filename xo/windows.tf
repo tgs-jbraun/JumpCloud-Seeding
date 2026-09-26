@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 # Built from the JumpCloud Windows 11 template, lab network only (no LAN NIC),
 # so they get their addresses from pfSense's LAN DHCP.
 #

@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 variable "xoa_url" {
   type        = string
   description = "XOA websocket URL (must be ws:// or wss://)"

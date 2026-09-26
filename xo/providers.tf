@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 terraform {
   required_version = ">= 1.3"
 

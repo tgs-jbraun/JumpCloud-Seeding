@@ -1,3 +1,5 @@
+# Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
+
 data "xenorchestra_pool" "pool" {
   name_label = "my-xcp-pool"
 }
