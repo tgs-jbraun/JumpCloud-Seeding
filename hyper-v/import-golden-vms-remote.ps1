@@ -198,7 +198,9 @@ if ($ownSession) {
     New-PSSession @connect
   }
   # The session is authenticated. Drop the credential so it isn't kept around.
-  $Credential = $null; $connect = $null
+  # Remove the variable instead of assigning $null: the [Credential()]
+  # attribute stays on $Credential, and assigning $null prompts again.
+  Remove-Variable -Name Credential, connect
 }
 
 try {
