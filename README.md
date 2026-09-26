@@ -36,9 +36,21 @@ Install-Module PwshSpectreConsole -Scope CurrentUser
 .\hyper-v\import-golden-vms-remote.ps1 -ComputerName hyperv01
 ```
 
-It asks for the host's administrator account with `Get-Credential` and never
-stores the password. If the host's certificate is self-signed, it offers to
-skip certificate checks for that connection. The comments at the top of each script list all options.
+The remote version walks through these steps in a terminal UI:
+
+1. Asks for your name and the host name.
+2. Validates the host's SSL certificate on WinRM HTTPS (port 5986). If the
+   certificate isn't valid, for example because it's self-signed, it shows
+   why and asks whether to skip certificate checks for this connection. The
+   default is No.
+3. Asks for the host's administrator account with `Get-Credential`. The
+   password stays encrypted in memory and is never stored.
+4. Shows the deployment plan as a table.
+5. If you already have lab VMs or folders, lists them and offers Cancel,
+   Redeploy or Delete in an arrow-key menu.
+6. Imports each VM with its own progress bar, then shows a results table.
+
+The comments at the top of each script list all options.
 
 The comments in each folder's files list the manual steps the tools can't do.
 Open problems and workarounds are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).

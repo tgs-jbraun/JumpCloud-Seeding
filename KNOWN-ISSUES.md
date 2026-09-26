@@ -15,6 +15,7 @@ When its fix is merged, move the row to **Fixed** and name the commit.
 
 | Affects | Issue | Fix |
 |---|---|---|
+| Remote TUI script | The script asked for credentials before it checked the host's SSL certificate. Choosing to skip certificate checks still failed if the certificate couldn't be checked for revocation. | `6bcc167`: the certificate is validated before `Get-Credential`, and skipping also turns off the revocation check. |
 | Hyper-V import script | Redeploy and Delete failed with "The process cannot access the file '….vmcx' because it is being used by another process". A VM left under its golden name in a lab folder was missed, so Hyper-V still held its files. | `d47036b`: the pre-deployment check also finds VMs by folder and deletes them through Hyper-V before removing the folder. |
 
 _Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code._
