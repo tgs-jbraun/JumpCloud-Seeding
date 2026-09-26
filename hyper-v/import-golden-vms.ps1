@@ -5,14 +5,30 @@
 # If you already have VMs with those names, it asks whether to redeploy them,
 # delete them, or cancel before it changes anything.
 #
-# Run on the Hyper-V host in an elevated PowerShell. It prompts for your name
-# unless you pass -UserName:
-#   .\import-golden-vms.ps1
-#   .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
+# Run it in an elevated PowerShell, either on the Hyper-V host or remotely.
+# It prompts for your name unless you pass -UserName.
+#
+#   Locally, on the Hyper-V host:
+#     .\import-golden-vms.ps1
+#     .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
+#
+#   Remotely, over WinRM HTTPS (port 5986). Prompts and the progress bar
+#   appear on your machine, and -Source and -Destination are host paths:
+#     .\import-golden-vms.ps1 -ComputerName hyperv01 -Credential (Get-Credential)
+#     .\import-golden-vms.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert
+#
+#   Remotely, over a PSSession you already opened. It must be encrypted
+#   (HTTPS, Kerberos or NTLM), so Basic auth over HTTP is refused:
+#     $s = New-PSSession -ComputerName hyperv01 -UseSSL
+#     .\import-golden-vms.ps1 -Session $s
 param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
-  [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V'
+  [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
+  [string]$ComputerName,
+  [pscredential]$Credential,
+  [switch]$SkipCertificateCheck,
+  [System.Management.Automation.Runspaces.PSSession]$Session
 )
 $ErrorActionPreference = 'Stop'
 
@@ -20,6 +36,29 @@ $ErrorActionPreference = 'Stop'
 $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'A name is required' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
+
+# Remote run: send this same script to the host and run it there. It starts
+# without -ComputerName or -Session, so on the host it takes the local path below.
+if ($ComputerName -or $Session) {
+  $ownSession = -not $Session
+  if ($ownSession) {
+    $connect = @{ ComputerName = $ComputerName; UseSSL = $true }
+    if ($Credential) { $connect.Credential = $Credential }
+    if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck }
+    $Session = New-PSSession @connect
+  }
+  try {
+    $info = $Session.Runspace.ConnectionInfo
+    if ($info.AuthenticationMechanism -eq 'Basic' -and $info.Scheme -ne 'https') {
+      throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
+    }
+    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination
+  }
+  finally {
+    if ($ownSession) { Remove-PSSession $Session }
+  }
+  return
+}
 
 # An export keeps the VM config at <VM>\Virtual Machines\<GUID>.vmcx.
 # Checkpoint configs live elsewhere and come along with the import.
