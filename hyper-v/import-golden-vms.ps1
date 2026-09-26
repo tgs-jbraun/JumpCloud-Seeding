@@ -46,12 +46,36 @@ if ($existing) {
   $answer = $Host.UI.PromptForChoice('Existing VMs found', 'What do you want to do?', $choices, 2)
   if ($answer -eq 2) { Write-Host 'Cancelled. Nothing was changed.'; return }
 
+  # Waits up to 5 minutes for a Hyper-V state change to finish
+  function Wait-Until($what, [scriptblock]$done) {
+    $deadline = (Get-Date).AddMinutes(5)
+    while (-not (& $done)) {
+      if ((Get-Date) -gt $deadline) { throw "Timed out waiting for $what" }
+      Start-Sleep -Seconds 2
+    }
+  }
+
   foreach ($vm in $existing) {
     Write-Progress -Activity 'Deleting existing VMs' -Status $vm.Name
     $disks = @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path)
-    Stop-VM -VM $vm -TurnOff -Force -ErrorAction SilentlyContinue
+
+    # 1. Power off through Hyper-V. A saved state has to be discarded first.
+    if ($vm.State -eq 'Saved') { Remove-VMSavedState -VM $vm }
+    if ((Get-VM -Id $vm.Id).State -ne 'Off') {
+      Stop-VM -VM $vm -TurnOff -Force
+      Wait-Until "$($vm.Name) to turn off" { (Get-VM -Id $vm.Id).State -eq 'Off' }
+    }
+
+    # 2. Delete checkpoints and let Hyper-V finish merging them. Remove-VM
+    # would otherwise merge them after the VM is gone, keeping the disks locked.
+    Get-VMSnapshot -VM $vm | Remove-VMSnapshot -IncludeAllChildSnapshots
+    Wait-Until "$($vm.Name) checkpoints to merge" { (Get-VM -Id $vm.Id).OperationalStatus -notcontains 'MergingDisks' }
+
+    # 3. Delete the VM in Hyper-V and confirm it's gone
     Remove-VM -VM $vm -Force
-    # Remove-VM keeps the disks and folder, so delete them too
+    Wait-Until "$($vm.Name) to be removed" { -not (Get-VM -Id $vm.Id -ErrorAction SilentlyContinue) }
+
+    # 4. Remove-VM keeps the virtual disks and folder, so delete them last
     $disks | Where-Object { $_ -and (Test-Path $_) } | Remove-Item -Force
     $dir = Join-Path $Destination $vm.Name
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
