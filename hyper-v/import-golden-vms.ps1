@@ -1,7 +1,7 @@
 # Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
 
 # Imports every Hyper-V VM exported under C:\Users\Public\Documents\Hyper-V\Golden, renames it to
-# <name>_JumpCloud_Lab_<your name>, then starts it. It imports each VM as a copy
+# <your name>_JCLab_<name>, then starts it. It imports each VM as a copy
 # with a new ID, so the golden exports stay untouched.
 #
 # If you already have VMs with those names, it asks whether to redeploy them,
@@ -70,7 +70,7 @@ if (-not $configs) { throw "No exported VMs found under $Source" }
 # Name each export will get once imported
 $plan = foreach ($config in $configs) {
   $name = (Compare-VM -Path $config.FullName -Copy -GenerateNewId).VM.Name
-  [pscustomobject]@{ Config = $config; Name = $name; NewName = "${name}_JumpCloud_Lab_${UserName}" }
+  [pscustomobject]@{ Config = $config; Name = $name; NewName = "${UserName}_JCLab_${name}" }
 }
 
 # Pre-deployment check. A VM counts as yours if it has a planned name, or if
@@ -81,7 +81,9 @@ $dirs = @($plan.NewName | ForEach-Object { Join-Path $Destination $_ })
 function Test-InLabFolder($path) {
   $path -and ($dirs | Where-Object { "$path\".StartsWith("$_\", [StringComparison]::OrdinalIgnoreCase) })
 }
-$existing = @(Get-VM | Where-Object { $plan.NewName -contains $_.Name -or (Test-InLabFolder $_.Path) })
+# VMs without checkpoints first, so the slow checkpoint merges run last
+$existing = @(Get-VM | Where-Object { $plan.NewName -contains $_.Name -or (Test-InLabFolder $_.Path) } |
+  Sort-Object { @(Get-VMSnapshot -VM $_).Count -gt 0 })
 # Folders left with no VM in them, for example by a failed import
 $folders = @(foreach ($dir in $dirs) {
   $inUse = $existing | Where-Object { "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
@@ -90,7 +92,7 @@ $folders = @(foreach ($dir in $dirs) {
 if ($existing -or $folders) {
   if ($existing) {
     Write-Host "You already have these VMs:"
-    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State)) in $($_.Path)" }
+    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State), $(@(Get-VMSnapshot -VM $_).Count) checkpoints) in $($_.Path)" }
   }
   if ($folders) {
     Write-Host "These destination folders already exist:"

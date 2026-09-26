@@ -6,7 +6,7 @@
 # Remote-run copy of import-golden-vms.ps1 with a richer terminal UI. Run it
 # on your workstation. It connects to the Hyper-V host over WinRM HTTPS, then
 # imports every VM exported under C:\Users\Public\Documents\Hyper-V\Golden on the host, renames it to
-# <name>_JumpCloud_Lab_<your name>, and starts it. The golden exports stay
+# <your name>_JCLab_<name>, and starts it. The golden exports stay
 # untouched.
 #
 # The UI comes from PwshSpectreConsole (MIT license, wraps Spectre.Console).
@@ -23,7 +23,11 @@
 # Examples:
 #   .\import-golden-vms-remote.ps1
 #   .\import-golden-vms-remote.ps1 -ComputerName hyperv01 -UserName jdoe
-#   .\import-golden-vms-remote.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert
+#   .\import-golden-vms-remote.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert, no prompt
+#
+# If the host's certificate isn't trusted (for example, self-signed), the
+# script explains the error and asks whether to skip certificate checks.
+# The default answer is No.
 #   $s = New-PSSession -ComputerName hyperv01 -UseSSL; .\import-golden-vms-remote.ps1 -Session $s
 param(
   [string]$ComputerName,
@@ -52,13 +56,15 @@ $remotePlan = {
   if (-not $configs) { throw "No exported VMs found under $Source" }
   $plan = @(foreach ($config in $configs) {
     $name = (Compare-VM -Path $config.FullName -Copy -GenerateNewId).VM.Name
-    $newName = "${name}_JumpCloud_Lab_${UserName}"
+    $newName = "${UserName}_JCLab_${name}"
     [pscustomobject]@{ ConfigPath = $config.FullName; Name = $name; NewName = $newName; Dir = Join-Path $Destination $newName }
   })
   $dirs = @($plan.Dir)
   function Test-InFolder($path, $dir) { $path -and "$path\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
   $existing = @(Get-VM | Where-Object { $vm = $_; $plan.NewName -contains $vm.Name -or ($dirs | Where-Object { Test-InFolder $vm.Path $_ }) } |
-    ForEach-Object { [pscustomobject]@{ Id = $_.Id.Guid; Name = $_.Name; State = "$($_.State)"; Path = $_.Path } })
+    ForEach-Object { [pscustomobject]@{ Id = $_.Id.Guid; Name = $_.Name; State = "$($_.State)"; Checkpoints = @(Get-VMSnapshot -VM $_).Count; Path = $_.Path } } |
+    # VMs without checkpoints first, so the slow checkpoint merges run last
+    Sort-Object { $_.Checkpoints -gt 0 })
   $folders = @(foreach ($dir in $dirs) {
     if ((Test-Path $dir) -and -not ($existing | Where-Object { Test-InFolder $_.Path $dir })) { $dir }
   })
@@ -151,9 +157,28 @@ if ($ownSession) {
     $Credential = Get-Credential -Message "Administrator account on $ComputerName"
   }
   $connect = @{ ComputerName = $ComputerName; UseSSL = $true; Credential = $Credential }
-  if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck }
-  $Session = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
-    New-PSSession @connect
+  $skipCertOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
+  if ($SkipCertificateCheck) { $connect.SessionOption = $skipCertOption }
+  $connectStep = {
+    Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
+      New-PSSession @connect
+    }
+  }
+  try {
+    $Session = & $connectStep
+  }
+  catch {
+    # A self-signed or mismatched certificate fails the trusted connection.
+    # Offer to skip the checks, defaulting to No.
+    if ($SkipCertificateCheck -or ($_ | Out-String) -notmatch 'certificate') { throw }
+    Write-SpectreHost "[yellow]The host's HTTPS certificate isn't trusted[/] (usually because it's self-signed):"
+    Write-SpectreHost "[grey]$(Esc $_.Exception.Message.Trim())[/]"
+    Write-SpectreHost 'Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.'
+    if ((Read-SpectreConfirm -Message 'Skip certificate checks for this connection?' -DefaultAnswer n) -ne $true) {
+      throw 'Not connected: the certificate is not trusted. Install a trusted certificate on the host, or rerun with -SkipCertificateCheck.'
+    }
+    $connect.SessionOption = $skipCertOption
+    $Session = & $connectStep
   }
   # The session is authenticated. Drop the credential so it isn't kept around.
   $Credential = $null; $connect = $null
@@ -176,7 +201,7 @@ try {
   # Pre-deployment check
   if ($state.Existing -or $state.Folders) {
     if ($state.Existing) {
-      $state.Existing | Select-Object Name, State, Path | Format-SpectreTable -Title 'You already have these VMs' -Color Yellow
+      $state.Existing | Select-Object Name, State, Checkpoints, Path | Format-SpectreTable -Title 'You already have these VMs' -Color Yellow
     }
     if ($state.Folders) {
       $state.Folders | ForEach-Object { [pscustomobject]@{ Folder = $_ } } | Format-SpectreTable -Title 'These folders already exist' -Color Yellow
