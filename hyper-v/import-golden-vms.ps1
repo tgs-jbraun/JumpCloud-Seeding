@@ -71,18 +71,27 @@ $plan = foreach ($config in $configs) {
   [pscustomobject]@{ Config = $config; Name = $name; NewName = "${name}_JumpCloud_Lab_${UserName}" }
 }
 
-# Pre-deployment check: VMs you already have with the same names
+# Pre-deployment check: VMs you already have with the same names, and
+# destination folders left without a VM (for example by a failed import)
 $existing = @(Get-VM -Name $plan.NewName -ErrorAction SilentlyContinue)
-if ($existing) {
-  Write-Host "You already have these VMs:"
-  $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State))" }
+$folders = @($plan.NewName | Where-Object { $existing.Name -notcontains $_ } |
+  ForEach-Object { Join-Path $Destination $_ } | Where-Object { Test-Path $_ })
+if ($existing -or $folders) {
+  if ($existing) {
+    Write-Host "You already have these VMs:"
+    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State))" }
+  }
+  if ($folders) {
+    Write-Host "These destination folders already exist:"
+    $folders | ForEach-Object { Write-Host "  $_" }
+  }
 
   $choices = [System.Management.Automation.Host.ChoiceDescription[]]@(
-    New-Object System.Management.Automation.Host.ChoiceDescription '&Redeploy', 'Delete these VMs and their disks, then import fresh copies'
-    New-Object System.Management.Automation.Host.ChoiceDescription '&Delete', 'Delete these VMs and their disks, then stop'
+    New-Object System.Management.Automation.Host.ChoiceDescription '&Redeploy', 'Delete these VMs, disks and folders, then import fresh copies'
+    New-Object System.Management.Automation.Host.ChoiceDescription '&Delete', 'Delete these VMs, disks and folders, then stop'
     New-Object System.Management.Automation.Host.ChoiceDescription '&Cancel', 'Stop without changing anything'
   )
-  $answer = $Host.UI.PromptForChoice('Existing VMs found', 'What do you want to do?', $choices, 2)
+  $answer = $Host.UI.PromptForChoice('Existing lab found', 'What do you want to do?', $choices, 2)
   if ($answer -eq 2) { Write-Host 'Cancelled. Nothing was changed.'; return }
 
   # Waits up to 5 minutes for a Hyper-V state change to finish
@@ -119,6 +128,10 @@ if ($existing) {
     $dir = Join-Path $Destination $vm.Name
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     Write-Host "Deleted $($vm.Name)"
+  }
+  foreach ($folder in $folders) {
+    Remove-Item $folder -Recurse -Force
+    Write-Host "Deleted folder $folder"
   }
   Write-Progress -Activity 'Deleting existing VMs' -Completed
   if ($answer -eq 1) { return }
