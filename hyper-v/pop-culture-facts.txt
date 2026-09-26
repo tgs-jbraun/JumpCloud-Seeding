@@ -1,6 +1,6 @@
 # Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
 #
-# Pop-culture facts the import scripts show while VMs copy.
+# Pop-culture facts the remote import script shows while VMs copy.
 # One fact per line: first sentence | second sentence | source.
 # Keep each fact to two sentences, paraphrased (not copied) from the source.
 # Lines starting with # are ignored.
