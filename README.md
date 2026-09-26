@@ -19,3 +19,5 @@ terraform apply
 ```
 
 Each folder's `.tf` files list the manual steps that Terraform can't do.
+
+Open problems and workarounds are tracked in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
