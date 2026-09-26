@@ -72,19 +72,39 @@ foreach ($p in $plan) {
   $i++
   try {
     Show-Step 'Checking the export'
+    # Copy import (never in-place registration), with every file written under
+    # this VM's destination folder. Import-VM's Copy parameter set takes these
+    # paths directly. Its CompatibilityReport set takes no paths at all.
     $dir = Join-Path $Destination $p.NewName
-    $report = Compare-VM -Path $p.Config.FullName -Copy -GenerateNewId `
-      -VirtualMachinePath $dir -SnapshotFilePath $dir -SmartPagingFilePath $dir `
-      -VhdDestinationPath (Join-Path $dir 'Virtual Hard Disks')
+    $import = @{
+      Path                = $p.Config.FullName
+      Copy                = $true
+      GenerateNewId       = $true
+      VirtualMachinePath  = $dir
+      SnapshotFilePath    = $dir
+      SmartPagingFilePath = $dir
+      VhdDestinationPath  = Join-Path $dir 'Virtual Hard Disks'
+    }
 
     # Usually a virtual switch that doesn't exist on this host
+    $report = Compare-VM @import
     if ($report.Incompatibilities) {
       Write-Warning "Skip $($p.Name): $($report.Incompatibilities.Message -join '; ')"
       continue
     }
 
     Show-Step 'Copying the VM and its disks (can take several minutes)'
-    $vm = Import-VM -CompatibilityReport $report
+    $vm = Import-VM @import
+
+    # Confirm nothing still points at the golden export or a default location
+    $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
+      @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
+      Where-Object { $_ -and -not $_.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
+    if ($outside) {
+      Remove-VM -VM $vm -Force
+      throw "imported files landed outside ${dir}: $($outside -join ', '). Removed the VM."
+    }
+
     Show-Step "Renaming to $($p.NewName) and starting"
     Rename-VM -VM $vm -NewName $p.NewName
     Start-VM -VM $vm
