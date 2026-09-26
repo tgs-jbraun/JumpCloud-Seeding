@@ -14,6 +14,9 @@
 # nothing new. One-time setup on the workstation:
 #   Install-Module PwshSpectreConsole -Scope CurrentUser
 #
+# Before it asks for credentials, the script validates the host's SSL
+# certificate on the WinRM HTTPS listener (port 5986).
+#
 # Credentials: the script asks with Get-Credential, which keeps the password
 # in a SecureString inside a PSCredential. It never converts the password to
 # plain text, writes it anywhere, or accepts it as a plain-text parameter.
@@ -153,32 +156,46 @@ if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "N
 $ownSession = -not $Session
 if ($ownSession) {
   if (-not $ComputerName) { $ComputerName = Read-Host 'Hyper-V host name or IP' }
+
+  # 1. Validate the host's SSL certificate before asking for credentials.
+  # Test-WSMan -UseSSL makes a TLS connection to the WinRM HTTPS listener
+  # (port 5986) without logging in. Windows rejects the certificate if it's
+  # self-signed or from an untrusted authority, expired, revoked or
+  # unverifiable, or issued for a different host name.
+  $certError = $null
+  Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Checking the SSL certificate on $(Esc $ComputerName):5986" -ScriptBlock {
+    try { Test-WSMan -ComputerName $ComputerName -UseSSL | Out-Null }
+    catch { $script:certError = ($_ | Out-String).Trim() }
+  }
+  $certInvalid = $certError -match 'certificate'
+  # Any other failure (except "access denied", which comes after the TLS
+  # handshake) means no certificate could be checked at all
+  if ($certError -and -not $certInvalid -and $certError -notmatch 'Access is denied') {
+    Write-SpectreHost "[red]Couldn't reach a WinRM HTTPS listener on $(Esc $ComputerName):5986 to check its certificate.[/]"
+    Write-SpectreHost "[grey]$(Esc $certError)[/]"
+    throw 'Not connected. Enable WinRM over HTTPS on the host (see the README), then run the script again.'
+  }
+  if (-not $certInvalid) { Write-SpectreHost "[green]SSL certificate is valid[/] for $(Esc $ComputerName)" }
+
+  # 2. Invalid certificate: show why and offer to skip the checks, default No
+  if ($certInvalid -and -not $SkipCertificateCheck) {
+    Write-SpectreHost "[yellow]The SSL certificate on $(Esc $ComputerName) isn't valid[/] (usually because it's self-signed):"
+    Write-SpectreHost "[grey]$(Esc $certError)[/]"
+    Write-SpectreHost 'Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.'
+    if ((Read-SpectreConfirm -Message 'Skip certificate checks for this connection?' -DefaultAnswer n) -ne $true) {
+      throw 'Not connected: the certificate is not valid. Install a trusted certificate on the host, or rerun with -SkipCertificateCheck.'
+    }
+    $SkipCertificateCheck = $true
+  }
+
+  # 3. Only now ask for the host's administrator account
   if ($Credential -eq [pscredential]::Empty) {
     $Credential = Get-Credential -Message "Administrator account on $ComputerName"
   }
   $connect = @{ ComputerName = $ComputerName; UseSSL = $true; Credential = $Credential }
-  $skipCertOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
-  if ($SkipCertificateCheck) { $connect.SessionOption = $skipCertOption }
-  $connectStep = {
-    Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
-      New-PSSession @connect
-    }
-  }
-  try {
-    $Session = & $connectStep
-  }
-  catch {
-    # A self-signed or mismatched certificate fails the trusted connection.
-    # Offer to skip the checks, defaulting to No.
-    if ($SkipCertificateCheck -or ($_ | Out-String) -notmatch 'certificate') { throw }
-    Write-SpectreHost "[yellow]The host's HTTPS certificate isn't trusted[/] (usually because it's self-signed):"
-    Write-SpectreHost "[grey]$(Esc $_.Exception.Message.Trim())[/]"
-    Write-SpectreHost 'Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.'
-    if ((Read-SpectreConfirm -Message 'Skip certificate checks for this connection?' -DefaultAnswer n) -ne $true) {
-      throw 'Not connected: the certificate is not trusted. Install a trusted certificate on the host, or rerun with -SkipCertificateCheck.'
-    }
-    $connect.SessionOption = $skipCertOption
-    $Session = & $connectStep
+  if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck }
+  $Session = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
+    New-PSSession @connect
   }
   # The session is authenticated. Drop the credential so it isn't kept around.
   $Credential = $null; $connect = $null
