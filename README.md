@@ -26,8 +26,11 @@ it, or deploy only the VMs that are missing.
 
 | Script | Runs on | Needs | Interface |
 |---|---|---|---|
-| [`import-golden-vms.ps1`](hyper-v/import-golden-vms.ps1) | The Hyper-V host, or remotely over WinRM HTTPS | Windows PowerShell 5.1, built in. Run it elevated on the host. | Plain prompts and a progress bar |
+| [`import-golden-vms.ps1`](hyper-v/import-golden-vms.ps1) | The Hyper-V host | Windows PowerShell 5.1, built in. Run it elevated. | Plain prompts and a progress bar |
 | [`import-golden-vms-remote.ps1`](hyper-v/import-golden-vms-remote.ps1) | Your workstation, connecting to the host over WinRM HTTPS | PowerShell 7.4 and the [PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole) module | Tables, menus, spinners and a live deployment table |
+
+Both scripts run the host-side steps from
+[`JCLab.Host.ps1`](hyper-v/JCLab.Host.ps1), so keep it in the same folder.
 
 To run the remote version, install the module once, then start the script:
 

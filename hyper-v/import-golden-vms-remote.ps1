@@ -20,8 +20,8 @@
 # Credentials: the script asks with Get-Credential, which keeps the password
 # in a SecureString inside a PSCredential. It never converts the password to
 # plain text, writes it anywhere, or accepts it as a plain-text parameter.
-# It connects over HTTPS only (or a PSSession you pass that is encrypted),
-# and drops its reference to the credential once connected.
+# It connects over HTTPS only, and drops its reference to the credential
+# once connected.
 #
 # Examples:
 #   .\import-golden-vms-remote.ps1
@@ -32,13 +32,11 @@
 # If the host's certificate isn't trusted (for example, self-signed), the
 # script explains the error and asks whether to skip certificate checks.
 # The default answer is No.
-#   $s = New-PSSession -ComputerName hyperv01 -UseSSL; .\import-golden-vms-remote.ps1 -Session $s
 param(
   [string]$ComputerName,
   # Pass a PSCredential, or a user name to be prompted for its password
   [pscredential][System.Management.Automation.Credential()]$Credential = [pscredential]::Empty,
   [switch]$SkipCertificateCheck,
-  [System.Management.Automation.Runspaces.PSSession]$Session,
   [string]$UserName,
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
   [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
@@ -58,127 +56,6 @@ $facts = @(if (Test-Path $factsFile) {
 })
 if ($facts) { $facts = @($facts | Get-Random -Count $facts.Count) }
 $nextFact = 0
-
-# --- Steps that run on the Hyper-V host ------------------------------------
-
-# Finds the golden exports, the names they will get, and anything of yours
-# already there. A VM counts as yours if it has a planned name, or if its
-# files live in a planned destination folder (an interrupted run can leave a
-# VM there under its golden name).
-$remotePlan = {
-  param($Source, $Destination, $UserName)
-  $ErrorActionPreference = 'Stop'
-  $configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
-  # Skip folders that a VM registered on this host runs from, such as a
-  # permanent VM kept under the golden folder. It isn't a lab export, and
-  # Hyper-V keeps its files locked.
-  $vmFiles = @(Get-VM | ForEach-Object { $_.ConfigurationLocation; Get-VMHardDiskDrive -VM $_ | ForEach-Object Path })
-  $skipped = [System.Collections.Generic.List[object]]::new()
-  $configs = @(foreach ($config in $configs) {
-    $folder = $config.Directory.Parent.FullName
-    if ($vmFiles | Where-Object { "$_\".StartsWith("$folder\", [StringComparison]::OrdinalIgnoreCase) }) {
-      $skipped.Add([pscustomobject]@{ Export = $config.Directory.Parent.Name; Reason = "A VM on this host runs from $folder" })
-    }
-    else { $config }
-  })
-  if (-not $configs) { throw "No exported VMs found under $Source" }
-  $plan = @(foreach ($config in $configs) {
-    # Export-VM names the export folder after the VM. Compare-VM would copy the
-    # export's files just to report the name, and fails if one is locked.
-    $name = $config.Directory.Parent.Name
-    $newName = "${UserName}_JCLab_${name}"
-    [pscustomobject]@{ ConfigPath = $config.FullName; Name = $name; NewName = $newName; Dir = Join-Path $Destination $newName }
-  })
-  $dirs = @($plan.Dir)
-  function Test-InFolder($path, $dir) { $path -and "$path\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
-  $existing = @(Get-VM | Where-Object { $vm = $_; $plan.NewName -contains $vm.Name -or ($dirs | Where-Object { Test-InFolder $vm.Path $_ }) } |
-    ForEach-Object { [pscustomobject]@{ Id = $_.Id.Guid; Name = $_.Name; State = "$($_.State)"; Checkpoints = @(Get-VMSnapshot -VM $_).Count; Path = $_.Path } } |
-    # VMs without checkpoints first, so the slow checkpoint merges run last
-    Sort-Object { $_.Checkpoints -gt 0 })
-  $folders = @(foreach ($dir in $dirs) {
-    if ((Test-Path $dir) -and -not ($existing | Where-Object { Test-InFolder $_.Path $dir })) { $dir }
-  })
-  [pscustomobject]@{ Plan = $plan; Existing = $existing; Folders = $folders; Skipped = @($skipped) }
-}
-
-# Deletes one VM through Hyper-V, waiting for each step, then its disk files
-$remoteDeleteVM = {
-  param($VmId)
-  $ErrorActionPreference = 'Stop'
-  function Wait-Until($what, [scriptblock]$done) {
-    $deadline = (Get-Date).AddMinutes(5)
-    while (-not (& $done)) {
-      if ((Get-Date) -gt $deadline) { throw "Timed out waiting for $what" }
-      Start-Sleep -Seconds 2
-    }
-  }
-  $vm = Get-VM -Id $VmId
-  $disks = @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path)
-  if ($vm.State -eq 'Saved') { Remove-VMSavedState -VM $vm }
-  if ((Get-VM -Id $VmId).State -ne 'Off') {
-    Stop-VM -VM $vm -TurnOff -Force
-    Wait-Until "$($vm.Name) to turn off" { (Get-VM -Id $VmId).State -eq 'Off' }
-  }
-  # Delete checkpoints first. Remove-VM would merge them after the VM is gone,
-  # keeping the disks locked.
-  Get-VMSnapshot -VM $vm | Remove-VMSnapshot -IncludeAllChildSnapshots
-  Wait-Until "$($vm.Name) checkpoints to merge" { (Get-VM -Id $VmId).OperationalStatus -notcontains 'MergingDisks' }
-  Remove-VM -VM $vm -Force
-  Wait-Until "$($vm.Name) to be removed" { -not (Get-VM -Id $VmId -ErrorAction SilentlyContinue) }
-  # Remove-VM keeps the virtual disks
-  $disks | Where-Object { $_ -and (Test-Path $_) } | Remove-Item -Force
-}
-
-$remoteDeleteFolders = {
-  param($Dirs)
-  foreach ($dir in $Dirs | Where-Object { Test-Path $_ }) { Remove-Item $dir -Recurse -Force }
-}
-
-# Compatibility check with the same arguments as the import. Returns the
-# problems, usually a virtual switch that doesn't exist on the host.
-$remoteCheck = {
-  param($ConfigPath, $Dir)
-  $ErrorActionPreference = 'Stop'
-  $report = Compare-VM -Path $ConfigPath -Copy -GenerateNewId -VirtualMachinePath $Dir -SnapshotFilePath $Dir `
-    -SmartPagingFilePath $Dir -VhdDestinationPath (Join-Path $Dir 'Virtual Hard Disks')
-  @($report.Incompatibilities.Message)
-}
-
-# Starts a copy import (never in-place registration) with every file under
-# $Dir, as a native Hyper-V job. The job stays in the session, so several
-# imports run at once. Returns the job ID.
-$remoteImport = {
-  param($ConfigPath, $Dir)
-  $ErrorActionPreference = 'Stop'
-  (Import-VM -Path $ConfigPath -Copy -GenerateNewId -VirtualMachinePath $Dir -SnapshotFilePath $Dir `
-    -SmartPagingFilePath $Dir -VhdDestinationPath (Join-Path $Dir 'Virtual Hard Disks') -AsJob).Id
-}
-
-# Returns the IDs of the import jobs that have finished
-$remoteFinished = {
-  param($JobIds)
-  Get-Job -Id $JobIds | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' } | ForEach-Object Id
-}
-
-# Collects a finished import, confirms nothing points at the golden export or
-# a default location, then renames and starts the VM
-$remoteStart = {
-  param($JobId, $Dir, $NewName)
-  $ErrorActionPreference = 'Stop'
-  $job = Get-Job -Id $JobId
-  try { $vm = Receive-Job $job } finally { Remove-Job $job }
-  if (-not $vm) { throw 'Import-VM returned no VM' }
-  $vm = Get-VM -Id $vm.Id
-  $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
-    @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
-    Where-Object { $_ -and -not $_.StartsWith($Dir, [StringComparison]::OrdinalIgnoreCase) }
-  if ($outside) {
-    Remove-VM -VM $vm -Force
-    throw "imported files are outside ${Dir}: $($outside -join ', '). Removed the VM."
-  }
-  Rename-VM -VM $vm -NewName $NewName
-  Start-VM -VM $vm
-}
 
 # --- Local UI ---------------------------------------------------------------
 
@@ -202,62 +79,60 @@ $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
 
-$ownSession = -not $Session
-if ($ownSession) {
-  if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Hyper-V host name or IP' $recent.ComputerName }
-  if (-not $ComputerName) { throw 'No host given. Enter a host or pass -ComputerName.' }
+if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Hyper-V host name or IP' $recent.ComputerName }
+if (-not $ComputerName) { throw 'No host given. Enter a host or pass -ComputerName.' }
 
-  # 1. Validate the host's SSL certificate before asking for credentials.
-  # Test-WSMan -UseSSL makes a TLS connection to the WinRM HTTPS listener
-  # (port 5986) without logging in. Windows rejects the certificate if it's
-  # self-signed or from an untrusted authority, expired, revoked or
-  # unverifiable, or issued for a different host name.
-  $certError = $null
-  Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Checking the SSL certificate on $(Esc $ComputerName):5986" -ScriptBlock {
-    try { Test-WSMan -ComputerName $ComputerName -UseSSL | Out-Null }
-    catch { $script:certError = ($_ | Out-String).Trim() }
-  }
-  $certInvalid = $certError -match 'certificate'
-  # Any other failure (except "access denied", which comes after the TLS
-  # handshake) means no certificate could be checked at all
-  if ($certError -and -not $certInvalid -and $certError -notmatch 'Access is denied') {
-    Write-SpectreHost "[red]Couldn't reach a WinRM HTTPS listener on $(Esc $ComputerName):5986 to check its certificate.[/]"
-    Write-SpectreHost "[grey]$(Esc $certError)[/]"
-    throw 'Not connected. Enable WinRM over HTTPS on the host (see the README), then run the script again.'
-  }
-  if (-not $certInvalid) { Write-SpectreHost "[green]SSL certificate is valid[/] for $(Esc $ComputerName)" }
+# 1. Validate the host's SSL certificate before asking for credentials.
+# Test-WSMan -UseSSL makes a TLS connection to the WinRM HTTPS listener
+# (port 5986) without logging in. Windows rejects the certificate if it's
+# self-signed or from an untrusted authority, expired, revoked or
+# unverifiable, or issued for a different host name.
+$certError = $null
+Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Checking the SSL certificate on $(Esc $ComputerName):5986" -ScriptBlock {
+  try { Test-WSMan -ComputerName $ComputerName -UseSSL | Out-Null }
+  catch { $script:certError = ($_ | Out-String).Trim() }
+}
+$certInvalid = $certError -match 'certificate'
+# Any other failure (except "access denied", which comes after the TLS
+# handshake) means no certificate could be checked at all
+if ($certError -and -not $certInvalid -and $certError -notmatch 'Access is denied') {
+  Write-SpectreHost "[red]Couldn't reach a WinRM HTTPS listener on $(Esc $ComputerName):5986 to check its certificate.[/]"
+  Write-SpectreHost "[grey]$(Esc $certError)[/]"
+  throw 'Not connected. Enable WinRM over HTTPS on the host (see the README), then run the script again.'
+}
+if (-not $certInvalid) { Write-SpectreHost "[green]SSL certificate is valid[/] for $(Esc $ComputerName)" }
 
-  # 2. Invalid certificate: show why and offer to skip the checks, default No
-  if ($certInvalid -and -not $SkipCertificateCheck) {
-    Write-SpectreHost "[yellow]The SSL certificate on $(Esc $ComputerName) isn't valid[/] (usually because it's self-signed):"
-    Write-SpectreHost "[grey]$(Esc $certError)[/]"
-    Write-SpectreHost 'Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.'
-    if ((Read-SpectreConfirm -Message 'Skip certificate checks for this connection?' -DefaultAnswer n) -ne $true) {
-      throw 'Not connected: the certificate is not valid. Install a trusted certificate on the host, or rerun with -SkipCertificateCheck.'
-    }
-    $SkipCertificateCheck = $true
+# 2. Invalid certificate: show why and offer to skip the checks, default No
+if ($certInvalid -and -not $SkipCertificateCheck) {
+  Write-SpectreHost "[yellow]The SSL certificate on $(Esc $ComputerName) isn't valid[/] (usually because it's self-signed):"
+  Write-SpectreHost "[grey]$(Esc $certError)[/]"
+  Write-SpectreHost 'Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.'
+  if ((Read-SpectreConfirm -Message 'Skip certificate checks for this connection?' -DefaultAnswer n) -ne $true) {
+    throw 'Not connected: the certificate is not valid. Install a trusted certificate on the host, or rerun with -SkipCertificateCheck.'
   }
-
-  # 3. Only now ask for the host's administrator account
-  if ($Credential -eq [pscredential]::Empty) {
-    $Credential = Get-Credential -Message "Administrator account on $ComputerName"
-  }
-  $connect = @{ ComputerName = $ComputerName; UseSSL = $true; Credential = $Credential }
-  if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck }
-  $Session = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
-    New-PSSession @connect
-  }
-  # The session is authenticated. Drop the credential so it isn't kept around.
-  # Remove the variable instead of assigning $null: the [Credential()]
-  # attribute stays on $Credential, and assigning $null prompts again.
-  Remove-Variable -Name Credential, connect
+  $SkipCertificateCheck = $true
 }
 
+# 3. Only now ask for the host's administrator account
+if ($Credential -eq [pscredential]::Empty) {
+  $Credential = Get-Credential -Message "Administrator account on $ComputerName"
+}
+$connect = @{ ComputerName = $ComputerName; UseSSL = $true; Credential = $Credential }
+if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck }
+$Session = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title "Connecting to $(Esc $ComputerName) over HTTPS" -ScriptBlock {
+  New-PSSession @connect
+}
+# The session is authenticated. Drop the credential so it isn't kept around.
+# Remove the variable instead of assigning $null: the [Credential()]
+# attribute stays on $Credential, and assigning $null prompts again.
+Remove-Variable -Name Credential, connect
+
 try {
+  # Load the shared host steps into the session. Remote commands run at the
+  # session's global scope, so the functions stay defined for later calls.
+  Invoke-Command -Session $Session -ScriptBlock ([scriptblock]::Create((Get-Content -Raw (Join-Path $PSScriptRoot 'JCLab.Host.ps1'))))
+
   $info = $Session.Runspace.ConnectionInfo
-  if ($info.AuthenticationMechanism -eq 'Basic' -and $info.Scheme -ne 'https') {
-    throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
-  }
   Write-SpectreHost "[green]Connected[/] to [bold]$(Esc $Session.ComputerName)[/] ($(Esc $info.Scheme), $(Esc $info.AuthenticationMechanism))"
 
   try {
@@ -266,9 +141,10 @@ try {
   } catch { Write-SpectreHost "[grey]Couldn't save the name and host for next time: $(Esc $_)[/]" }
 
   $state = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Reading golden exports on the host' -ScriptBlock {
-    Invoke-Command -Session $Session -ScriptBlock $remotePlan -ArgumentList $Source, $Destination, $UserName
+    Invoke-Command -Session $Session { Get-LabState @args } -ArgumentList $Source, $Destination, $UserName
   }
   $plan = @($state.Plan)
+  $missing = @($state.Missing)
   if ($state.Skipped) {
     $state.Skipped | Select-Object Export, Reason | Format-SpectreTable -Title 'Not part of the lab (skipped)' -Color Grey
   }
@@ -283,11 +159,6 @@ try {
     if ($state.Folders) {
       $state.Folders | ForEach-Object { [pscustomobject]@{ Folder = $_ } } | Format-SpectreTable -Title 'These folders already exist' -Color Yellow
     }
-    # Planned VMs you don't have yet: no VM with that name and no VM in its folder
-    $missing = @($plan | Where-Object {
-      $p = $_
-      -not ($state.Existing | Where-Object { $_.Name -eq $p.NewName -or "$($_.Path)\".StartsWith("$($p.Dir)\", [StringComparison]::OrdinalIgnoreCase) })
-    })
 
     $cancel = 'Cancel: change nothing'
     $redeploy = 'Redeploy: delete these VMs, disks and folders, then import fresh copies'
@@ -307,19 +178,17 @@ try {
     if ($answer -eq $deployMissing) {
       # Keep the existing VMs. Clear only the leftover folders, which belong to
       # missing VMs, so their imports start clean.
-      if ($state.Folders) {
-        Invoke-Command -Session $Session -ScriptBlock $remoteDeleteFolders -ArgumentList (, @($state.Folders))
-      }
+      Invoke-Command -Session $Session { Remove-LabFolder @args } -ArgumentList (, @($state.Folders))
       $plan = $missing
       Write-SpectreHost "[green]Keeping your existing VMs.[/] Importing $($missing.Count) missing."
     }
     else {
       Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Deleting existing VMs through Hyper-V' -ScriptBlock {
         foreach ($vm in $state.Existing) {
-          Invoke-Command -Session $Session -ScriptBlock $remoteDeleteVM -ArgumentList $vm.Id
+          Invoke-Command -Session $Session { Remove-LabVM @args } -ArgumentList $vm.Id
           Write-SpectreHost "[red]Deleted[/] $(Esc $vm.Name)"
         }
-        Invoke-Command -Session $Session -ScriptBlock $remoteDeleteFolders -ArgumentList (, @($plan.Dir))
+        Invoke-Command -Session $Session { Remove-LabFolder @args } -ArgumentList (, @($plan.Dir))
       }
       Write-SpectreHost '[green]Existing lab removed.[/]'
       if ($answer -eq $delete) { return }
@@ -387,15 +256,7 @@ try {
         $p = $queue.Dequeue()
         $n = $p.NewName
         try {
-          Update-View $n 0 '[yellow]Checking[/]'
-          $problems = @(Invoke-Command -Session $Session -ScriptBlock $remoteCheck -ArgumentList $p.ConfigPath, $p.Dir)
-          if ($problems) {
-            Update-View $n 100 '[yellow]Skipped[/]'
-            $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[yellow]Skipped[/]: $(Esc ($problems -join '; '))" })
-            continue
-          }
-          $jobId = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir
-          $running[$jobId] = $p
+          $running[(Invoke-Command -Session $Session { Start-LabImport @args } -ArgumentList $p.ConfigPath, $p.Dir)] = $p
           Update-View $n 10 '[deepskyblue1]Copying VM and disks[/]'
         }
         catch { Add-Failure $n $_ }
@@ -404,14 +265,14 @@ try {
       Start-Sleep -Seconds 1
       Update-View
       if (-not $running.Count) { continue }
-      $finished = @(Invoke-Command -Session $Session -ScriptBlock $remoteFinished -ArgumentList (, @($running.Keys)))
+      $finished = @(Invoke-Command -Session $Session { Get-FinishedLabImport @args } -ArgumentList (, @($running.Keys)))
       foreach ($jobId in $finished) {
         $p = $running[$jobId]
         $running.Remove($jobId)
         $n = $p.NewName
         try {
           Update-View $n 90 '[deepskyblue1]Starting[/]'
-          Invoke-Command -Session $Session -ScriptBlock $remoteStart -ArgumentList $jobId, $p.Dir, $n
+          Invoke-Command -Session $Session { Complete-LabImport @args } -ArgumentList $jobId, $n
           Update-View $n 100 '[green]Imported and started[/]'
           $results.Add([pscustomobject]@{ VM = (Esc $n); Result = '[green]Imported and started[/]' })
         }
@@ -425,5 +286,5 @@ try {
   $results | Format-SpectreTable -Title 'Results' -AllowMarkup -Color DeepSkyBlue1
 }
 finally {
-  if ($ownSession -and $Session) { Remove-PSSession $Session }
+  Remove-PSSession $Session
 }

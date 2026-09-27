@@ -31,9 +31,8 @@ variable "vm_count" {
   description = "Number of Ubuntu VMs to deploy"
 
   validation {
-    # MAC suffixes start at 0x0b, so at most 244 VMs fit before 0xff
-    condition     = var.vm_count >= 1 && var.vm_count <= 244 && floor(var.vm_count) == var.vm_count
-    error_message = "vm_count must be a whole number from 1 to 244."
+    condition     = var.vm_count >= 1 && floor(var.vm_count) == var.vm_count
+    error_message = "vm_count must be a whole number of 1 or more."
   }
 }
 

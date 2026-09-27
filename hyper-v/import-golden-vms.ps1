@@ -5,130 +5,54 @@
 # with a new ID, so the golden exports stay untouched.
 #
 # If you already have VMs with those names, it asks whether to redeploy them,
-# delete them, or cancel before it changes anything.
+# delete them, deploy only the missing ones, or cancel before it changes
+# anything.
 #
-# Run it in an elevated PowerShell, either on the Hyper-V host or remotely.
+# Run it on the Hyper-V host in an elevated PowerShell, with JCLab.Host.ps1
+# next to it. To run from your workstation, use import-golden-vms-remote.ps1.
 # It prompts for your name unless you pass -UserName.
 #
-#   Locally, on the Hyper-V host:
-#     .\import-golden-vms.ps1
-#     .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
-#     .\import-golden-vms.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
-#
-#   Remotely, over WinRM HTTPS (port 5986). Prompts and the progress bar
-#   appear on your machine, and -Source and -Destination are host paths:
-#     .\import-golden-vms.ps1 -ComputerName hyperv01 -Credential (Get-Credential)
-#     .\import-golden-vms.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert
-#
-#   Remotely, over a PSSession you already opened. HTTPS, Kerberos and NTLM
-#   sessions are encrypted. The script refuses Basic auth over HTTP:
-#     $s = New-PSSession -ComputerName hyperv01 -UseSSL
-#     .\import-golden-vms.ps1 -Session $s
+#   .\import-golden-vms.ps1
+#   .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
+#   .\import-golden-vms.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
 param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
   [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
   # VMs imported at once. Lower it on spinning disks.
-  [ValidateRange(1, 16)][int]$ThrottleLimit = 3,
-  [string]$ComputerName,
-  [pscredential]$Credential,
-  [switch]$SkipCertificateCheck,
-  [System.Management.Automation.Runspaces.PSSession]$Session
+  [ValidateRange(1, 16)][int]$ThrottleLimit = 3
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'JCLab.Host.ps1')
 
 # The name also becomes part of each VM's folder, so keep it path-safe
 $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
 
-# Remote run: send this same script to the host and run it there. It starts
-# without -ComputerName or -Session, so on the host it takes the local path below.
-if ($ComputerName -or $Session) {
-  $ownSession = -not $Session
-  if ($ownSession) {
-    $connect = @{ ComputerName = $ComputerName; UseSSL = $true }
-    if ($Credential) { $connect.Credential = $Credential }
-    if ($SkipCertificateCheck) { $connect.SessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck }
-    $Session = New-PSSession @connect
-  }
-  try {
-    $info = $Session.Runspace.ConnectionInfo
-    if ($info.AuthenticationMechanism -eq 'Basic' -and $info.Scheme -ne 'https') {
-      throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
-    }
-    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination, $ThrottleLimit
-  }
-  finally {
-    if ($ownSession) { Remove-PSSession $Session }
-  }
-  return
-}
+$state = Get-LabState $Source $Destination $UserName
+$state.Skipped | ForEach-Object { Write-Host "Skipping $($_.Export): $($_.Reason)" }
+$plan = $state.Plan
 
-# An export keeps the VM config at <VM>\Virtual Machines\<GUID>.vmcx.
-# Checkpoint configs live elsewhere and come along with the import.
-$configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
-
-# Skip folders that a VM registered on this host runs from, such as a
-# permanent VM kept under the golden folder. It isn't a lab export, and
-# Hyper-V keeps its files locked.
-$vmFiles = @(Get-VM | ForEach-Object { $_.ConfigurationLocation; Get-VMHardDiskDrive -VM $_ | ForEach-Object Path })
-$configs = @(foreach ($config in $configs) {
-  $folder = $config.Directory.Parent.FullName
-  if ($vmFiles | Where-Object { "$_\".StartsWith("$folder\", [StringComparison]::OrdinalIgnoreCase) }) {
-    Write-Host "Skipping $($config.Directory.Parent.Name): a VM on this host runs from $folder"
-  }
-  else { $config }
-})
-if (-not $configs) { throw "No exported VMs found under $Source" }
-
-# Name each export will get once imported. Export-VM names the export folder
-# after the VM, so read the name from there. Compare-VM would copy the
-# export's files just to report the name, and fails if one is locked.
-$plan = foreach ($config in $configs) {
-  $name = $config.Directory.Parent.Name
-  [pscustomobject]@{ Config = $config; Name = $name; NewName = "${UserName}_JCLab_${name}" }
-}
-
-# Pre-deployment check. A VM counts as yours if it has a planned name, or if
-# its files live in a planned destination folder. An interrupted run can
-# leave a VM there under its golden name. Hyper-V keeps that VM's files locked
-# until the VM itself is deleted.
-$dirs = @($plan.NewName | ForEach-Object { Join-Path $Destination $_ })
-function Test-InLabFolder($path) {
-  $path -and ($dirs | Where-Object { "$path\".StartsWith("$_\", [StringComparison]::OrdinalIgnoreCase) })
-}
-# VMs without checkpoints first, so the slow checkpoint merges run last
-$existing = @(Get-VM | Where-Object { $plan.NewName -contains $_.Name -or (Test-InLabFolder $_.Path) } |
-  Sort-Object { @(Get-VMSnapshot -VM $_).Count -gt 0 })
-# Folders left with no VM in them, for example by a failed import
-$folders = @(foreach ($dir in $dirs) {
-  $inUse = $existing | Where-Object { "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
-  if ((Test-Path $dir) -and -not $inUse) { $dir }
-})
-# Planned VMs you don't have yet: no VM with that name and no VM in its folder
-$missing = @($plan | Where-Object {
-  $p = $_; $dir = Join-Path $Destination $p.NewName
-  -not ($existing | Where-Object { $_.Name -eq $p.NewName -or "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) })
-})
+# Pre-deployment check
 $answer = $null
-if ($existing -or $folders) {
-  if ($existing) {
+if ($state.Existing -or $state.Folders) {
+  if ($state.Existing) {
     Write-Host "You already have these VMs:"
-    $existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State), $(@(Get-VMSnapshot -VM $_).Count) checkpoints) in $($_.Path)" }
+    $state.Existing | ForEach-Object { Write-Host "  $($_.Name) ($($_.State), $($_.Checkpoints) checkpoints) in $($_.Path)" }
   }
-  if ($folders) {
+  if ($state.Folders) {
     Write-Host "These destination folders already exist:"
-    $folders | ForEach-Object { Write-Host "  $_" }
+    $state.Folders | ForEach-Object { Write-Host "  $_" }
   }
 
   # Offer "Deploy missing" only when you have some of the lab but not all of it
   $options = @(
     @{ Key = 'Redeploy'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Redeploy', 'Delete these VMs, disks and folders, then import fresh copies' }
-    if ($existing -and $missing) {
-      Write-Host "Missing from your lab ($($missing.Count) of $(@($plan).Count)):"
-      $missing | ForEach-Object { Write-Host "  $($_.NewName)" }
-      @{ Key = 'Missing'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription 'Deploy &missing', "Keep the VMs you have. Import only the $($missing.Count) missing ones." }
+    if ($state.Existing -and $state.Missing) {
+      Write-Host "Missing from your lab ($($state.Missing.Count) of $($plan.Count)):"
+      $state.Missing | ForEach-Object { Write-Host "  $($_.NewName)" }
+      @{ Key = 'Missing'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription 'Deploy &missing', "Keep the VMs you have. Import only the $($state.Missing.Count) missing ones." }
     }
     @{ Key = 'Delete'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Delete', 'Delete these VMs, disks and folders, then stop' }
     @{ Key = 'Cancel'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Cancel', 'Stop without changing anything' }
@@ -141,133 +65,49 @@ if ($existing -or $folders) {
 if ($answer -eq 'Missing') {
   # Keep the existing VMs. Clear only the leftover folders, which belong to
   # missing VMs, so their imports start clean.
-  foreach ($dir in $folders) {
-    Remove-Item $dir -Recurse -Force
-    Write-Host "Deleted folder $dir"
-  }
-  $plan = $missing
+  Remove-LabFolder $state.Folders
+  $plan = $state.Missing
 }
 elseif ($answer) {
-
-  # Waits up to 5 minutes for a Hyper-V state change to finish
-  function Wait-Until($what, [scriptblock]$done) {
-    $deadline = (Get-Date).AddMinutes(5)
-    while (-not (& $done)) {
-      if ((Get-Date) -gt $deadline) { throw "Timed out waiting for $what" }
-      Start-Sleep -Seconds 2
-    }
-  }
-
-  foreach ($vm in $existing) {
+  foreach ($vm in $state.Existing) {
     Write-Progress -Activity 'Deleting existing VMs' -Status $vm.Name
-    $disks = @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path)
-
-    # 1. Power off through Hyper-V. Discard a saved state first.
-    if ($vm.State -eq 'Saved') { Remove-VMSavedState -VM $vm }
-    if ((Get-VM -Id $vm.Id).State -ne 'Off') {
-      Stop-VM -VM $vm -TurnOff -Force
-      Wait-Until "$($vm.Name) to turn off" { (Get-VM -Id $vm.Id).State -eq 'Off' }
-    }
-
-    # 2. Delete checkpoints and let Hyper-V finish merging them. Remove-VM
-    # would otherwise merge them after the VM is gone, keeping the disks locked.
-    Get-VMSnapshot -VM $vm | Remove-VMSnapshot -IncludeAllChildSnapshots
-    Wait-Until "$($vm.Name) checkpoints to merge" { (Get-VM -Id $vm.Id).OperationalStatus -notcontains 'MergingDisks' }
-
-    # 3. Delete the VM in Hyper-V and confirm it's gone
-    Remove-VM -VM $vm -Force
-    Wait-Until "$($vm.Name) to be removed" { -not (Get-VM -Id $vm.Id -ErrorAction SilentlyContinue) }
-
-    # 4. Remove-VM keeps the virtual disks and folder, so delete them last
-    $disks | Where-Object { $_ -and (Test-Path $_) } | Remove-Item -Force
+    Remove-LabVM $vm.Id
     Write-Host "Deleted $($vm.Name)"
   }
   # Every VM using these folders is gone now, so nothing holds their files
-  foreach ($dir in $dirs | Where-Object { Test-Path $_ }) {
-    Remove-Item $dir -Recurse -Force
-    Write-Host "Deleted folder $dir"
-  }
+  Remove-LabFolder $plan.Dir
   Write-Progress -Activity 'Deleting existing VMs' -Completed
   if ($answer -eq 'Delete') { return }
 }
 
-# Import up to $ThrottleLimit VMs at once. Each Import-VM runs as a native
-# Hyper-V job. Once a job finishes, the VM is checked, renamed and started.
-# More at once is faster on SSD or NVMe. On spinning disks, lower it.
-function Get-ImportArgs($p) {
-  # Copy the VM (never register it in place) and write every file under this
-  # VM's destination folder. Only Import-VM's Copy parameter set takes these
-  # paths. Its CompatibilityReport set takes none.
-  $dir = Join-Path $Destination $p.NewName
-  @{
-    Path                = $p.Config.FullName
-    Copy                = $true
-    GenerateNewId       = $true
-    VirtualMachinePath  = $dir
-    SnapshotFilePath    = $dir
-    SmartPagingFilePath = $dir
-    VhdDestinationPath  = Join-Path $dir 'Virtual Hard Disks'
-  }
-}
-
-function Complete-Import($job, $p) {
-  $dir = Join-Path $Destination $p.NewName
-  $vm = Receive-Job $job
-  Remove-Job $job
-  if (-not $vm) { throw 'Import-VM returned no VM' }
-  $vm = Get-VM -Id $vm.Id
-
-  # Confirm nothing still points at the golden export or a default location
-  $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
-    @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
-    Where-Object { $_ -and -not $_.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
-  if ($outside) {
-    Remove-VM -VM $vm -Force
-    throw "imported files are outside ${dir}: $($outside -join ', '). Removed the VM."
-  }
-
-  Rename-VM -VM $vm -NewName $p.NewName
-  Start-VM -VM $vm
-  Write-Host "Imported $($p.Name) and started it as $($p.NewName)"
-}
-
+# Import up to $ThrottleLimit VMs at once. When an import finishes, the VM is
+# renamed and started.
 $queue = [System.Collections.Queue]::new(@($plan))
-$running = @{}   # import job -> plan entry
-$total = @($plan).Count
+$running = @{}   # import job ID -> plan entry
 $done = 0
 while ($queue.Count -or $running.Count) {
-  # Fill free slots. The compatibility check is quick, so it runs here.
   while ($queue.Count -and $running.Count -lt $ThrottleLimit) {
     $p = $queue.Dequeue()
-    try {
-      $import = Get-ImportArgs $p
-      # Usually a virtual switch that doesn't exist on this host
-      $report = Compare-VM @import
-      if ($report.Incompatibilities) {
-        Write-Warning "Skip $($p.Name): $($report.Incompatibilities.Message -join '; ')"
-        $done++
-        continue
-      }
-      $running[(Import-VM @import -AsJob)] = $p
-    }
-    catch {
-      Write-Warning "Failed $($p.Config.FullName): $_"
-      $done++
-    }
+    try { $running[(Start-LabImport $p.ConfigPath $p.Dir)] = $p }
+    catch { Write-Warning "Failed $($p.Name): $_"; $done++ }
   }
 
   # Built-in terminal progress bar: VMs finished, and the ones copying now
-  Write-Progress -Activity 'Importing golden VMs' -PercentComplete (100 * $done / $total) `
-    -Status "$done of $total VMs done, $($running.Count) copying (can take several minutes)" `
+  Write-Progress -Activity 'Importing golden VMs' -PercentComplete (100 * $done / $plan.Count) `
+    -Status "$done of $($plan.Count) VMs done, $($running.Count) copying (can take several minutes)" `
     -CurrentOperation (@($running.Values | ForEach-Object Name) -join ', ')
 
-  if ($running.Count) { Wait-Job -Job @($running.Keys) -Any -Timeout 2 | Out-Null }
-  foreach ($job in @($running.Keys | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' })) {
-    $p = $running[$job]
-    $running.Remove($job)
+  if (-not $running.Count) { continue }
+  Wait-Job -Id @($running.Keys) -Any -Timeout 2 | Out-Null
+  foreach ($id in @(Get-FinishedLabImport @($running.Keys))) {
+    $p = $running[$id]
+    $running.Remove($id)
     $done++
-    try { Complete-Import $job $p }
-    catch { Write-Warning "Failed $($p.Config.FullName): $_" }
+    try {
+      Complete-LabImport $id $p.NewName
+      Write-Host "Imported $($p.Name) and started it as $($p.NewName)"
+    }
+    catch { Write-Warning "Failed $($p.Name): $_" }
   }
 }
 Write-Progress -Activity 'Importing golden VMs' -Completed
