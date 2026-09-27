@@ -8,6 +8,8 @@ JumpCloud-Seeding deploys the VMs for the JumpCloud lab on three hypervisors. Ea
 | [Hyper-V](hyper-v.md) | Microsoft Hyper-V, through PowerShell | Each technician's copy of the golden VM exports under `C:\Users\Public\Documents\Hyper-V\Golden` |
 | [UTM on macOS](utm-macos.md) | UTM on a Mac with Apple silicon, through zsh | A macOS VM duplicated from a golden VM |
 
+[jclab.py](jclab.md) sets up and runs any of the three from one terminal UI.
+
 VMs a technician deploys carry their name: `<name>_JCLab_<vm>` on Hyper-V and `<name>_JCLab_macOS` on UTM.
 
 Open problems and workarounds are in [KNOWN-ISSUES.md](../KNOWN-ISSUES.md).

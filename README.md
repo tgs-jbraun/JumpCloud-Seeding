@@ -24,11 +24,22 @@ manual setup.
 | [`hyper-v/`](hyper-v) | Microsoft Hyper-V | PowerShell | Each technician's copy of the golden VM exports |
 | [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | zsh, with a Windows launcher | A macOS VM duplicated from a golden VM |
 
+## Quick start
+
+`jclab.py` sets up and runs the lab on any of the three hypervisors from one
+terminal UI:
+
+```bash
+python -m pip install -r requirements.txt
+python jclab.py
+```
+
 ## Documentation
 
 Setup, requirements, options and manual steps for each hypervisor are in
 [`docs/`](docs): [Xen Orchestra](docs/xen-orchestra.md),
-[Hyper-V](docs/hyper-v.md) and [UTM on macOS](docs/utm-macos.md). The comments
+[Hyper-V](docs/hyper-v.md), [UTM on macOS](docs/utm-macos.md) and the
+[jclab.py launcher](docs/jclab.md). The comments
 at the top of each script list its options too.
 
 Open problems and workarounds are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
