@@ -27,6 +27,7 @@
 #   .\import-golden-vms-remote.ps1
 #   .\import-golden-vms-remote.ps1 -ComputerName hyperv01 -UserName jdoe
 #   .\import-golden-vms-remote.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert, no prompt
+#   .\import-golden-vms-remote.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
 #
 # If the host's certificate isn't trusted (for example, self-signed), the
 # script explains the error and asks whether to skip certificate checks.
@@ -40,7 +41,9 @@ param(
   [System.Management.Automation.Runspaces.PSSession]$Session,
   [string]$UserName,
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
-  [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V'
+  [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
+  # VMs imported at once. Lower it if the host's disks are spinning disks.
+  [ValidateRange(1, 16)][int]$ThrottleLimit = 3
 )
 $ErrorActionPreference = 'Stop'
 
@@ -141,13 +144,31 @@ $remoteCheck = {
   @($report.Incompatibilities.Message)
 }
 
-# Copy import (never in-place registration) with every file under $Dir, then
-# confirm nothing points at the golden export or a default location
+# Starts a copy import (never in-place registration) with every file under
+# $Dir, as a native Hyper-V job. The job stays in the session, so several
+# imports run at once. Returns the job ID.
 $remoteImport = {
   param($ConfigPath, $Dir)
   $ErrorActionPreference = 'Stop'
-  $vm = Import-VM -Path $ConfigPath -Copy -GenerateNewId -VirtualMachinePath $Dir -SnapshotFilePath $Dir `
-    -SmartPagingFilePath $Dir -VhdDestinationPath (Join-Path $Dir 'Virtual Hard Disks')
+  (Import-VM -Path $ConfigPath -Copy -GenerateNewId -VirtualMachinePath $Dir -SnapshotFilePath $Dir `
+    -SmartPagingFilePath $Dir -VhdDestinationPath (Join-Path $Dir 'Virtual Hard Disks') -AsJob).Id
+}
+
+# Returns the IDs of the import jobs that have finished
+$remoteFinished = {
+  param($JobIds)
+  Get-Job -Id $JobIds | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' } | ForEach-Object Id
+}
+
+# Collects a finished import, confirms nothing points at the golden export or
+# a default location, then renames and starts the VM
+$remoteStart = {
+  param($JobId, $Dir, $NewName)
+  $ErrorActionPreference = 'Stop'
+  $job = Get-Job -Id $JobId
+  try { $vm = Receive-Job $job } finally { Remove-Job $job }
+  if (-not $vm) { throw 'Import-VM returned no VM' }
+  $vm = Get-VM -Id $vm.Id
   $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
     @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
     Where-Object { $_ -and -not $_.StartsWith($Dir, [StringComparison]::OrdinalIgnoreCase) }
@@ -155,13 +176,6 @@ $remoteImport = {
     Remove-VM -VM $vm -Force
     throw "imported files are outside ${Dir}: $($outside -join ', '). Removed the VM."
   }
-  $vm.Id.Guid
-}
-
-$remoteStart = {
-  param($VmId, $NewName)
-  $ErrorActionPreference = 'Stop'
-  $vm = Get-VM -Id $VmId
   Rename-VM -VM $vm -NewName $NewName
   Start-VM -VM $vm
 }
@@ -358,29 +372,50 @@ try {
       $Context.Refresh()
     }
 
-    foreach ($p in $plan) {
-      $n = $p.NewName
-      try {
-        Update-View $n 0 '[yellow]Checking[/]'
-        $problems = @(Invoke-Command -Session $Session -ScriptBlock $remoteCheck -ArgumentList $p.ConfigPath, $p.Dir)
-        if ($problems) {
-          Update-View $n 100 '[yellow]Skipped[/]'
-          $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[yellow]Skipped[/]: $(Esc ($problems -join '; '))" })
-          continue
+    function Add-Failure($n, $err) {
+      Update-View $n 100 '[red]Failed[/]'
+      $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[red]Failed[/]: $(Esc $err.Exception.Message)" })
+    }
+
+    # Up to $ThrottleLimit imports run on the host at once. The session runs
+    # one command at a time, so the script starts each import as a job on the
+    # host, then checks every second which ones have finished.
+    $queue = [System.Collections.Queue]::new(@($plan))
+    $running = @{}   # host job ID -> plan entry
+    while ($queue.Count -or $running.Count) {
+      while ($queue.Count -and $running.Count -lt $ThrottleLimit) {
+        $p = $queue.Dequeue()
+        $n = $p.NewName
+        try {
+          Update-View $n 0 '[yellow]Checking[/]'
+          $problems = @(Invoke-Command -Session $Session -ScriptBlock $remoteCheck -ArgumentList $p.ConfigPath, $p.Dir)
+          if ($problems) {
+            Update-View $n 100 '[yellow]Skipped[/]'
+            $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[yellow]Skipped[/]: $(Esc ($problems -join '; '))" })
+            continue
+          }
+          $jobId = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir
+          $running[$jobId] = $p
+          Update-View $n 10 '[deepskyblue1]Copying VM and disks[/]'
         }
-        Update-View $n 10 '[deepskyblue1]Copying VM and disks[/]'
-        # Run the copy as a job so the view can redraw once a second meanwhile
-        $job = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir -AsJob
-        while (-not (Wait-Job $job -Timeout 1)) { Update-View }
-        $id = Receive-Job $job -Wait -AutoRemoveJob
-        Update-View $n 90 '[deepskyblue1]Starting[/]'
-        Invoke-Command -Session $Session -ScriptBlock $remoteStart -ArgumentList $id, $p.NewName
-        Update-View $n 100 '[green]Imported and started[/]'
-        $results.Add([pscustomobject]@{ VM = (Esc $n); Result = '[green]Imported and started[/]' })
+        catch { Add-Failure $n $_ }
       }
-      catch {
-        Update-View $n 100 '[red]Failed[/]'
-        $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[red]Failed[/]: $(Esc $_.Exception.Message)" })
+
+      Start-Sleep -Seconds 1
+      Update-View
+      if (-not $running.Count) { continue }
+      $finished = @(Invoke-Command -Session $Session -ScriptBlock $remoteFinished -ArgumentList (, @($running.Keys)))
+      foreach ($jobId in $finished) {
+        $p = $running[$jobId]
+        $running.Remove($jobId)
+        $n = $p.NewName
+        try {
+          Update-View $n 90 '[deepskyblue1]Starting[/]'
+          Invoke-Command -Session $Session -ScriptBlock $remoteStart -ArgumentList $jobId, $p.Dir, $n
+          Update-View $n 100 '[green]Imported and started[/]'
+          $results.Add([pscustomobject]@{ VM = (Esc $n); Result = '[green]Imported and started[/]' })
+        }
+        catch { Add-Failure $n $_ }
       }
     }
     # Final frame: the VM table only

@@ -55,6 +55,10 @@ The remote version walks through these steps in a terminal UI:
 6. Imports the VMs in a live "Deploying lab VMs" table, with a progress bar
    and status for each VM, then shows a results table.
 
+Both scripts import 3 VMs at once by default. That is faster when the host
+copies between SSD or NVMe drives. On spinning disks, parallel copies compete
+for the same disks, so lower it with `-ThrottleLimit 1` or `2`.
+
 While the disks copy, the remote version shows random two-sentence pop-culture
 facts in a separate "While you wait" box below the VM table, so they can't be
 mistaken for VMs. The facts come from [`hyper-v/pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt). Each

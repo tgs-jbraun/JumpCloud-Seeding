@@ -13,6 +13,7 @@
 #   Locally, on the Hyper-V host:
 #     .\import-golden-vms.ps1
 #     .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
+#     .\import-golden-vms.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
 #
 #   Remotely, over WinRM HTTPS (port 5986). Prompts and the progress bar
 #   appear on your machine, and -Source and -Destination are host paths:
@@ -27,6 +28,8 @@ param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
   [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
+  # VMs imported at once. Lower it on spinning disks.
+  [ValidateRange(1, 16)][int]$ThrottleLimit = 3,
   [string]$ComputerName,
   [pscredential]$Credential,
   [switch]$SkipCertificateCheck,
@@ -54,7 +57,7 @@ if ($ComputerName -or $Session) {
     if ($info.AuthenticationMechanism -eq 'Basic' -and $info.Scheme -ne 'https') {
       throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
     }
-    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination
+    Invoke-Command -Session $Session -FilePath $PSCommandPath -ArgumentList $UserName, $Source, $Destination, $ThrottleLimit
   }
   finally {
     if ($ownSession) { Remove-PSSession $Session }
@@ -188,57 +191,83 @@ elseif ($answer) {
   if ($answer -eq 'Delete') { return }
 }
 
-# Built-in terminal progress bar: one bar across all VMs, the current step below it
-$i = 0
-function Show-Step($step) {
-  Write-Progress -Activity 'Importing golden VMs' -PercentComplete (100 * ($i - 1) / @($plan).Count) `
-    -Status "VM $i of $(@($plan).Count): $($p.Name)" -CurrentOperation $step
+# Import up to $ThrottleLimit VMs at once. Each Import-VM runs as a native
+# Hyper-V job. Once a job finishes, the VM is checked, renamed and started.
+# More at once is faster on SSD or NVMe. On spinning disks, lower it.
+function Get-ImportArgs($p) {
+  # Copy the VM (never register it in place) and write every file under this
+  # VM's destination folder. Only Import-VM's Copy parameter set takes these
+  # paths. Its CompatibilityReport set takes none.
+  $dir = Join-Path $Destination $p.NewName
+  @{
+    Path                = $p.Config.FullName
+    Copy                = $true
+    GenerateNewId       = $true
+    VirtualMachinePath  = $dir
+    SnapshotFilePath    = $dir
+    SmartPagingFilePath = $dir
+    VhdDestinationPath  = Join-Path $dir 'Virtual Hard Disks'
+  }
 }
 
-foreach ($p in $plan) {
-  $i++
-  try {
-    Show-Step 'Checking the export'
-    # Copy the VM (never register it in place) and write every file under this
-    # VM's destination folder. Only Import-VM's Copy parameter set takes these
-    # paths. Its CompatibilityReport set takes none.
-    $dir = Join-Path $Destination $p.NewName
-    $import = @{
-      Path                = $p.Config.FullName
-      Copy                = $true
-      GenerateNewId       = $true
-      VirtualMachinePath  = $dir
-      SnapshotFilePath    = $dir
-      SmartPagingFilePath = $dir
-      VhdDestinationPath  = Join-Path $dir 'Virtual Hard Disks'
-    }
+function Complete-Import($job, $p) {
+  $dir = Join-Path $Destination $p.NewName
+  $vm = Receive-Job $job
+  Remove-Job $job
+  if (-not $vm) { throw 'Import-VM returned no VM' }
+  $vm = Get-VM -Id $vm.Id
 
-    # Usually a virtual switch that doesn't exist on this host
-    $report = Compare-VM @import
-    if ($report.Incompatibilities) {
-      Write-Warning "Skip $($p.Name): $($report.Incompatibilities.Message -join '; ')"
-      continue
-    }
-
-    Show-Step 'Copying the VM and its disks (can take several minutes)'
-    $vm = Import-VM @import
-
-    # Confirm nothing still points at the golden export or a default location
-    $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
-      @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
-      Where-Object { $_ -and -not $_.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
-    if ($outside) {
-      Remove-VM -VM $vm -Force
-      throw "imported files are outside ${dir}: $($outside -join ', '). Removed the VM."
-    }
-
-    Show-Step "Renaming to $($p.NewName) and starting"
-    Rename-VM -VM $vm -NewName $p.NewName
-    Start-VM -VM $vm
-    Write-Host "Imported $($p.Name) and started it as $($p.NewName)"
+  # Confirm nothing still points at the golden export or a default location
+  $outside = @($vm.ConfigurationLocation, $vm.SnapshotFileLocation, $vm.SmartPagingFilePath) +
+    @(Get-VMHardDiskDrive -VM $vm | ForEach-Object Path) |
+    Where-Object { $_ -and -not $_.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
+  if ($outside) {
+    Remove-VM -VM $vm -Force
+    throw "imported files are outside ${dir}: $($outside -join ', '). Removed the VM."
   }
-  catch {
-    Write-Warning "Failed $($p.Config.FullName): $_"
+
+  Rename-VM -VM $vm -NewName $p.NewName
+  Start-VM -VM $vm
+  Write-Host "Imported $($p.Name) and started it as $($p.NewName)"
+}
+
+$queue = [System.Collections.Queue]::new(@($plan))
+$running = @{}   # import job -> plan entry
+$total = @($plan).Count
+$done = 0
+while ($queue.Count -or $running.Count) {
+  # Fill free slots. The compatibility check is quick, so it runs here.
+  while ($queue.Count -and $running.Count -lt $ThrottleLimit) {
+    $p = $queue.Dequeue()
+    try {
+      $import = Get-ImportArgs $p
+      # Usually a virtual switch that doesn't exist on this host
+      $report = Compare-VM @import
+      if ($report.Incompatibilities) {
+        Write-Warning "Skip $($p.Name): $($report.Incompatibilities.Message -join '; ')"
+        $done++
+        continue
+      }
+      $running[(Import-VM @import -AsJob)] = $p
+    }
+    catch {
+      Write-Warning "Failed $($p.Config.FullName): $_"
+      $done++
+    }
+  }
+
+  # Built-in terminal progress bar: VMs finished, and the ones copying now
+  Write-Progress -Activity 'Importing golden VMs' -PercentComplete (100 * $done / $total) `
+    -Status "$done of $total VMs done, $($running.Count) copying (can take several minutes)" `
+    -CurrentOperation (@($running.Values | ForEach-Object Name) -join ', ')
+
+  if ($running.Count) { Wait-Job -Job @($running.Keys) -Any -Timeout 2 | Out-Null }
+  foreach ($job in @($running.Keys | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' })) {
+    $p = $running[$job]
+    $running.Remove($job)
+    $done++
+    try { Complete-Import $job $p }
+    catch { Write-Warning "Failed $($p.Config.FullName): $_" }
   }
 }
 Write-Progress -Activity 'Importing golden VMs' -Completed
