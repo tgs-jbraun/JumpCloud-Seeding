@@ -277,7 +277,9 @@ try {
     foreach ($p in $plan) { $tasks[$p.NewName] = $Context.AddTask((Esc $p.NewName)) }
 
     # Two lines under the bars for the current fact, one sentence each
-    $factLines = @(if ($facts) { $Context.AddTask(' '); $Context.AddTask(' ') })
+    # Spectre rejects blank task names, so start with placeholder text.
+    # Show-Fact replaces it right away.
+    $factLines = @(if ($facts) { $Context.AddTask('Did you know?'); $Context.AddTask('...') })
     $factLines | ForEach-Object { $_.IsIndeterminate = $true }
     function Show-Fact {
       if (-not $factLines) { return }
