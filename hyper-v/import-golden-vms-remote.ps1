@@ -252,21 +252,47 @@ try {
     if ($state.Folders) {
       $state.Folders | ForEach-Object { [pscustomobject]@{ Folder = $_ } } | Format-SpectreTable -Title 'These folders already exist' -Color Yellow
     }
+    # Planned VMs you don't have yet: no VM with that name and no VM in its folder
+    $missing = @($plan | Where-Object {
+      $p = $_
+      -not ($state.Existing | Where-Object { $_.Name -eq $p.NewName -or "$($_.Path)\".StartsWith("$($p.Dir)\", [StringComparison]::OrdinalIgnoreCase) })
+    })
+
     $cancel = 'Cancel: change nothing'
     $redeploy = 'Redeploy: delete these VMs, disks and folders, then import fresh copies'
+    $deployMissing = "Deploy missing: keep the VMs you have, import only the $($missing.Count) missing"
     $delete = 'Delete: delete these VMs, disks and folders, then stop'
-    $answer = Read-SpectreSelection -Message 'Existing lab found. What do you want to do?' -Choices $cancel, $redeploy, $delete -Color Yellow
+    $choices = @($cancel, $redeploy)
+    # Offer "Deploy missing" only when you have some of the lab but not all of it
+    if ($state.Existing -and $missing) {
+      $missing | ForEach-Object { [pscustomobject]@{ 'Missing VM' = $_.NewName } } |
+        Format-SpectreTable -Title "Missing from your lab ($($missing.Count) of $($plan.Count))" -Color Yellow
+      $choices += $deployMissing
+    }
+    $choices += $delete
+    $answer = Read-SpectreSelection -Message 'Existing lab found. What do you want to do?' -Choices $choices -Color Yellow
     if (-not $answer -or $answer -eq $cancel) { Write-SpectreHost '[grey]Cancelled. Nothing changed.[/]'; return }
 
-    Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Deleting existing VMs through Hyper-V' -ScriptBlock {
-      foreach ($vm in $state.Existing) {
-        Invoke-Command -Session $Session -ScriptBlock $remoteDeleteVM -ArgumentList $vm.Id
-        Write-SpectreHost "[red]Deleted[/] $(Esc $vm.Name)"
+    if ($answer -eq $deployMissing) {
+      # Keep the existing VMs. Clear only the leftover folders, which belong to
+      # missing VMs, so their imports start clean.
+      if ($state.Folders) {
+        Invoke-Command -Session $Session -ScriptBlock $remoteDeleteFolders -ArgumentList (, @($state.Folders))
       }
-      Invoke-Command -Session $Session -ScriptBlock $remoteDeleteFolders -ArgumentList (, @($plan.Dir))
+      $plan = $missing
+      Write-SpectreHost "[green]Keeping your existing VMs.[/] Importing $($missing.Count) missing."
     }
-    Write-SpectreHost '[green]Existing lab removed.[/]'
-    if ($answer -eq $delete) { return }
+    else {
+      Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Deleting existing VMs through Hyper-V' -ScriptBlock {
+        foreach ($vm in $state.Existing) {
+          Invoke-Command -Session $Session -ScriptBlock $remoteDeleteVM -ArgumentList $vm.Id
+          Write-SpectreHost "[red]Deleted[/] $(Esc $vm.Name)"
+        }
+        Invoke-Command -Session $Session -ScriptBlock $remoteDeleteFolders -ArgumentList (, @($plan.Dir))
+      }
+      Write-SpectreHost '[green]Existing lab removed.[/]'
+      if ($answer -eq $delete) { return }
+    }
   }
 
   # Import. A live view shows the VMs in their own table and the pop-culture

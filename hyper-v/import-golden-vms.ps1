@@ -103,6 +103,12 @@ $folders = @(foreach ($dir in $dirs) {
   $inUse = $existing | Where-Object { "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) }
   if ((Test-Path $dir) -and -not $inUse) { $dir }
 })
+# Planned VMs you don't have yet: no VM with that name and no VM in its folder
+$missing = @($plan | Where-Object {
+  $p = $_; $dir = Join-Path $Destination $p.NewName
+  -not ($existing | Where-Object { $_.Name -eq $p.NewName -or "$($_.Path)\".StartsWith("$dir\", [StringComparison]::OrdinalIgnoreCase) })
+})
+$answer = $null
 if ($existing -or $folders) {
   if ($existing) {
     Write-Host "You already have these VMs:"
@@ -113,13 +119,32 @@ if ($existing -or $folders) {
     $folders | ForEach-Object { Write-Host "  $_" }
   }
 
-  $choices = [System.Management.Automation.Host.ChoiceDescription[]]@(
-    New-Object System.Management.Automation.Host.ChoiceDescription '&Redeploy', 'Delete these VMs, disks and folders, then import fresh copies'
-    New-Object System.Management.Automation.Host.ChoiceDescription '&Delete', 'Delete these VMs, disks and folders, then stop'
-    New-Object System.Management.Automation.Host.ChoiceDescription '&Cancel', 'Stop without changing anything'
+  # Offer "Deploy missing" only when you have some of the lab but not all of it
+  $options = @(
+    @{ Key = 'Redeploy'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Redeploy', 'Delete these VMs, disks and folders, then import fresh copies' }
+    if ($existing -and $missing) {
+      Write-Host "Missing from your lab ($($missing.Count) of $(@($plan).Count)):"
+      $missing | ForEach-Object { Write-Host "  $($_.NewName)" }
+      @{ Key = 'Missing'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription 'Deploy &missing', "Keep the VMs you have. Import only the $($missing.Count) missing ones." }
+    }
+    @{ Key = 'Delete'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Delete', 'Delete these VMs, disks and folders, then stop' }
+    @{ Key = 'Cancel'; Choice = New-Object System.Management.Automation.Host.ChoiceDescription '&Cancel', 'Stop without changing anything' }
   )
-  $answer = $Host.UI.PromptForChoice('Existing lab found', 'What do you want to do?', $choices, 2)
-  if ($answer -eq 2) { Write-Host 'Cancelled. Nothing changed.'; return }
+  $choices = [System.Management.Automation.Host.ChoiceDescription[]]@($options.Choice)
+  $answer = $options[$Host.UI.PromptForChoice('Existing lab found', 'What do you want to do?', $choices, $options.Count - 1)].Key
+  if ($answer -eq 'Cancel') { Write-Host 'Cancelled. Nothing changed.'; return }
+}
+
+if ($answer -eq 'Missing') {
+  # Keep the existing VMs. Clear only the leftover folders, which belong to
+  # missing VMs, so their imports start clean.
+  foreach ($dir in $folders) {
+    Remove-Item $dir -Recurse -Force
+    Write-Host "Deleted folder $dir"
+  }
+  $plan = $missing
+}
+elseif ($answer) {
 
   # Waits up to 5 minutes for a Hyper-V state change to finish
   function Wait-Until($what, [scriptblock]$done) {
@@ -160,7 +185,7 @@ if ($existing -or $folders) {
     Write-Host "Deleted folder $dir"
   }
   Write-Progress -Activity 'Deleting existing VMs' -Completed
-  if ($answer -eq 1) { return }
+  if ($answer -eq 'Delete') { return }
 }
 
 # Built-in terminal progress bar: one bar across all VMs, the current step below it

@@ -21,8 +21,8 @@ terraform apply
 ```
 
 On Hyper-V, two scripts do the same import. Both need an administrator account
-on the host, and both ask before they redeploy or delete a lab you already
-have.
+on the host, and both ask before they change a lab you already have: redeploy it, delete
+it, or deploy only the VMs that are missing.
 
 | Script | Runs on | Needs | Interface |
 |---|---|---|---|
@@ -47,7 +47,8 @@ The remote version walks through these steps in a terminal UI:
    password stays encrypted in memory and is never stored.
 4. Shows the deployment plan as a table.
 5. If you already have lab VMs or folders, lists them and offers Cancel,
-   Redeploy or Delete in an arrow-key menu.
+   Redeploy, Deploy missing or Delete in an arrow-key menu. Deploy missing
+   keeps your VMs and imports only the ones you don't have yet.
 6. Imports the VMs in a live "Deploying lab VMs" table, with a progress bar
    and status for each VM, then shows a results table.
 
