@@ -96,7 +96,7 @@ $certInvalid = $certError -match 'certificate'
 if ($certError -and -not $certInvalid -and $certError -notmatch 'Access is denied') {
   Write-SpectreHost "[red]Couldn't reach a WinRM HTTPS listener on $(Esc $ComputerName):5986 to check its certificate.[/]"
   Write-SpectreHost "[grey]$(Esc $certError)[/]"
-  throw 'Not connected. Enable WinRM over HTTPS on the host (see the README), then run the script again.'
+  throw 'Not connected. Enable WinRM over HTTPS on the host (see docs/hyper-v.md), then run the script again.'
 }
 if (-not $certInvalid) { Write-SpectreHost "[green]SSL certificate is valid[/] for $(Esc $ComputerName)" }
 

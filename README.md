@@ -1,96 +1,36 @@
 # JumpCloud lab
 
-Deploys the JumpCloud lab: 3 Ubuntu Server 24.04 VMs, a pfSense firewall and
-3 Windows 11 VMs, on an isolated lab network behind pfSense.
+JumpCloud-Seeding gives each technician a working JumpCloud test lab in
+minutes, on whichever hypervisor they have: Xen Orchestra, Hyper-V, or UTM on
+a Mac. Every lab is built from the same known-good templates or golden VMs, so
+labs start from the same state and can be torn down and redeployed without
+manual setup.
 
-Each folder deploys the lab on one hypervisor.
+## Goals
 
-| Folder | Hypervisor | Tool |
-|---|---|---|
-| [`xo/`](xo) | XCP-ng with Xen Orchestra | Terraform, `vatesfr/xenorchestra` provider |
-| [`hyper-v/`](hyper-v) | Microsoft Hyper-V | PowerShell scripts that import golden VM exports |
-| [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | A zsh script that duplicates a golden macOS VM into a lab VM |
+- **Repeatable:** deploy the same lab every time, from templates or golden VMs.
+- **Per technician:** each technician's VMs carry their name, so several labs
+  share one host without clashing.
+- **Safe to rerun:** the scripts ask before they change a lab you already
+  have, and never touch the golden VMs.
+- **Few dependencies:** use what each platform ships, and add a tool only
+  where it clearly helps.
 
-On Xen Orchestra, run Terraform from `xo/`:
+## What's here
 
-```bash
-cd xo
-copy terraform.tfvars.example terraform.tfvars   # then fill in real values
-terraform init
-terraform plan
-terraform apply
-```
-
-On Hyper-V, two scripts do the same import. Both need an administrator account
-on the host. Before they change a lab you already have, both ask whether to
-redeploy it, delete it, or deploy only the missing VMs.
-
-| Script | Runs on | Needs | Interface |
+| Folder | Hypervisor | Tool | Deploys |
 |---|---|---|---|
-| [`import-golden-vms.ps1`](hyper-v/import-golden-vms.ps1) | The Hyper-V host | Windows PowerShell 5.1, built in. Run it elevated. | Plain prompts and a progress bar |
-| [`import-golden-vms-remote.ps1`](hyper-v/import-golden-vms-remote.ps1) | Your workstation, connected to the host over WinRM HTTPS | PowerShell 7.4 and the [PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole) module | Tables, arrow-key menus and a live progress view |
+| [`xo/`](xo) | XCP-ng with Xen Orchestra | Terraform | 3 Ubuntu Server 24.04 VMs, a pfSense firewall and 3 Windows 11 VMs on an isolated lab network |
+| [`hyper-v/`](hyper-v) | Microsoft Hyper-V | PowerShell | Each technician's copy of the golden VM exports |
+| [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | zsh, with a Windows launcher | A macOS VM duplicated from a golden VM |
 
-Both scripts run their host-side steps from
-[`JCLab.Host.ps1`](hyper-v/JCLab.Host.ps1), so keep it in the same folder.
-Both import 3 VMs at once by default. Parallel copies are faster between SSD
-or NVMe drives. On spinning disks they compete for the same disks, so set
-`-ThrottleLimit 1` or `2`.
+## Documentation
 
-To run the remote version, install the module once, then start the script:
+Setup, requirements, options and manual steps for each hypervisor are in
+[`docs/`](docs): [Xen Orchestra](docs/xen-orchestra.md),
+[Hyper-V](docs/hyper-v.md) and [UTM on macOS](docs/utm-macos.md). The comments
+at the top of each script list its options too.
 
-```powershell
-Install-Module PwshSpectreConsole -Scope CurrentUser
-.\hyper-v\import-golden-vms-remote.ps1 -ComputerName hyperv01
-```
-
-The remote version takes these steps:
-
-1. Asks for your name and the host name. It offers the values from your last
-   successful connection as defaults, so Enter keeps them. They are saved in
-   `%APPDATA%\JumpCloud-Seeding\remote-import.json`. Credentials are never
-   saved.
-2. Checks the host's SSL certificate on WinRM HTTPS (port 5986). If the
-   certificate isn't valid, for example because it's self-signed, it shows
-   the reason and asks whether to skip certificate checks for this
-   connection. The default is No.
-3. Asks for the host's administrator account with `Get-Credential`. The
-   password stays encrypted in memory.
-4. Shows the deployment plan as a table.
-5. If you already have lab VMs or folders, lists them and offers Cancel,
-   Redeploy, Deploy missing or Delete in an arrow-key menu. Deploy missing
-   keeps your VMs and imports only the ones you don't have yet.
-6. Imports the VMs in a live "Deploying lab VMs" table, with a progress bar
-   and status for each VM, then shows a results table.
-
-While the disks copy, the remote version shows a random two-sentence
-pop-culture fact in a separate "While you wait" box below the VM table, so
-nobody mistakes a fact for a VM. The facts come from
-[`pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt), and each names its
-Wikipedia source. To add a fact, add a line to the file.
-On a Mac with UTM, [`deploy-macos-vm.zsh`](utm-qemu/deploy-macos-vm.zsh)
-duplicates a golden macOS VM that you build once in UTM, then starts the copy.
-Build the golden VM first, as the comments at the top of the script describe.
-Like the Hyper-V scripts, it remembers your name, shows the plan, and asks
-before it changes a lab VM you already have. It needs
-[gum](https://github.com/charmbracelet/gum) (`brew install gum`) for its menus,
-spinners and the pop-culture fact box.
-
-```bash
-./utm-qemu/deploy-macos-vm.zsh
-```
-
-To run it from Windows over SSH, use
-[`deploy-macos-vm-remote.ps1`](utm-qemu/deploy-macos-vm-remote.ps1). The Mac
-needs automatic login and Remote Login turned on. On the first run, click
-Allow on the Mac's screen when macOS asks whether SSH may control UTM.
-
-```powershell
-.\utm-qemu\deploy-macos-vm-remote.ps1 -ComputerName mac-mini.local -User labadmin
-```
-
-The comments at the top of each script list all options.
-
-The comments in each folder's files list the manual steps the tools can't do.
 Open problems and workarounds are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
 
 ## AI assistance
