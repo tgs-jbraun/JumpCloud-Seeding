@@ -38,7 +38,10 @@ Install-Module PwshSpectreConsole -Scope CurrentUser
 
 The remote version walks through these steps in a terminal UI:
 
-1. Asks for your name and the host name.
+1. Asks for your name and the host name. After a successful connection it
+   saves both to `%APPDATA%\JumpCloud-Seeding\remote-import.json` and offers
+   them as defaults next time, so pressing Enter keeps them. No credentials
+   are saved.
 2. Validates the host's SSL certificate on WinRM HTTPS (port 5986). If the
    certificate isn't valid, for example because it's self-signed, it shows
    why and asks whether to skip certificate checks for this connection. The

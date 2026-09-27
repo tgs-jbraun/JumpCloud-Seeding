@@ -171,15 +171,27 @@ $remoteStart = {
 Write-SpectreFigletText -Text 'JumpCloud Lab' -Alignment Center -Color DeepSkyBlue1
 Write-SpectreRule -Title 'Hyper-V golden VM import (remote)' -Alignment Center -Color Grey
 
-# Plain text prompts use Read-Host, as the PwshSpectreConsole docs advise
-if (-not $UserName) { $UserName = Read-Host 'Your name (added to each VM name)' }
+# The last technician name and connected host, offered as defaults next run.
+# Stored per user on this workstation. No credentials are saved.
+$recentFile = Join-Path $env:APPDATA 'JumpCloud-Seeding\remote-import.json'
+$recent = try { Get-Content $recentFile -Raw | ConvertFrom-Json } catch { $null }
+
+# Plain text prompts use Read-Host, as the PwshSpectreConsole docs advise.
+# Press Enter to keep the value in brackets.
+function Read-WithDefault($prompt, $default) {
+  if ($default) { $prompt += " [$default]" }
+  $answer = Read-Host $prompt
+  if ($answer) { $answer } else { $default }
+}
+if (-not $UserName) { $UserName = Read-WithDefault 'Your name (added to each VM name)' $recent.UserName }
 $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
 
 $ownSession = -not $Session
 if ($ownSession) {
-  if (-not $ComputerName) { $ComputerName = Read-Host 'Hyper-V host name or IP' }
+  if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Hyper-V host name or IP' $recent.ComputerName }
+  if (-not $ComputerName) { throw 'No host given. Enter a host or pass -ComputerName.' }
 
   # 1. Validate the host's SSL certificate before asking for credentials.
   # Test-WSMan -UseSSL makes a TLS connection to the WinRM HTTPS listener
@@ -233,6 +245,11 @@ try {
     throw 'Refusing an unencrypted session (Basic auth over HTTP). Connect with -UseSSL instead.'
   }
   Write-SpectreHost "[green]Connected[/] to [bold]$(Esc $Session.ComputerName)[/] ($(Esc $info.Scheme), $(Esc $info.AuthenticationMechanism))"
+
+  try {
+    New-Item -ItemType Directory -Force (Split-Path $recentFile) | Out-Null
+    @{ UserName = $UserName; ComputerName = $Session.ComputerName } | ConvertTo-Json | Set-Content $recentFile
+  } catch { Write-SpectreHost "[grey]Couldn't save the name and host for next time: $(Esc $_)[/]" }
 
   $state = Invoke-SpectreCommandWithStatus -Spinner Dots2 -Title 'Reading golden exports on the host' -ScriptBlock {
     Invoke-Command -Session $Session -ScriptBlock $remotePlan -ArgumentList $Source, $Destination, $UserName
