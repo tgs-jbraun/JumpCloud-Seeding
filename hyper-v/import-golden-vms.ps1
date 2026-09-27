@@ -65,11 +65,25 @@ if ($ComputerName -or $Session) {
 # An export keeps the VM config at <VM>\Virtual Machines\<GUID>.vmcx.
 # Checkpoint configs live elsewhere and come along with the import.
 $configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
+
+# Skip folders that a VM registered on this host runs from, such as a
+# permanent VM kept under the golden folder. It isn't a lab export, and
+# Hyper-V keeps its files locked.
+$vmFiles = @(Get-VM | ForEach-Object { $_.ConfigurationLocation; Get-VMHardDiskDrive -VM $_ | ForEach-Object Path })
+$configs = @(foreach ($config in $configs) {
+  $folder = $config.Directory.Parent.FullName
+  if ($vmFiles | Where-Object { "$_\".StartsWith("$folder\", [StringComparison]::OrdinalIgnoreCase) }) {
+    Write-Host "Skipping $($config.Directory.Parent.Name): a VM on this host runs from $folder"
+  }
+  else { $config }
+})
 if (-not $configs) { throw "No exported VMs found under $Source" }
 
-# Name each export will get once imported
+# Name each export will get once imported. Export-VM names the export folder
+# after the VM, so read the name from there. Compare-VM would copy the
+# export's files just to report the name, and fails if one is locked.
 $plan = foreach ($config in $configs) {
-  $name = (Compare-VM -Path $config.FullName -Copy -GenerateNewId).VM.Name
+  $name = $config.Directory.Parent.Name
   [pscustomobject]@{ Config = $config; Name = $name; NewName = "${UserName}_JCLab_${name}" }
 }
 

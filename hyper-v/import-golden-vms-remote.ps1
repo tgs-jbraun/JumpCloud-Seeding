@@ -66,9 +66,23 @@ $remotePlan = {
   param($Source, $Destination, $UserName)
   $ErrorActionPreference = 'Stop'
   $configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
+  # Skip folders that a VM registered on this host runs from, such as a
+  # permanent VM kept under the golden folder. It isn't a lab export, and
+  # Hyper-V keeps its files locked.
+  $vmFiles = @(Get-VM | ForEach-Object { $_.ConfigurationLocation; Get-VMHardDiskDrive -VM $_ | ForEach-Object Path })
+  $skipped = [System.Collections.Generic.List[object]]::new()
+  $configs = @(foreach ($config in $configs) {
+    $folder = $config.Directory.Parent.FullName
+    if ($vmFiles | Where-Object { "$_\".StartsWith("$folder\", [StringComparison]::OrdinalIgnoreCase) }) {
+      $skipped.Add([pscustomobject]@{ Export = $config.Directory.Parent.Name; Reason = "A VM on this host runs from $folder" })
+    }
+    else { $config }
+  })
   if (-not $configs) { throw "No exported VMs found under $Source" }
   $plan = @(foreach ($config in $configs) {
-    $name = (Compare-VM -Path $config.FullName -Copy -GenerateNewId).VM.Name
+    # Export-VM names the export folder after the VM. Compare-VM would copy the
+    # export's files just to report the name, and fails if one is locked.
+    $name = $config.Directory.Parent.Name
     $newName = "${UserName}_JCLab_${name}"
     [pscustomobject]@{ ConfigPath = $config.FullName; Name = $name; NewName = $newName; Dir = Join-Path $Destination $newName }
   })
@@ -81,7 +95,7 @@ $remotePlan = {
   $folders = @(foreach ($dir in $dirs) {
     if ((Test-Path $dir) -and -not ($existing | Where-Object { Test-InFolder $_.Path $dir })) { $dir }
   })
-  [pscustomobject]@{ Plan = $plan; Existing = $existing; Folders = $folders }
+  [pscustomobject]@{ Plan = $plan; Existing = $existing; Folders = $folders; Skipped = @($skipped) }
 }
 
 # Deletes one VM through Hyper-V, waiting for each step, then its disk files
@@ -224,6 +238,9 @@ try {
     Invoke-Command -Session $Session -ScriptBlock $remotePlan -ArgumentList $Source, $Destination, $UserName
   }
   $plan = @($state.Plan)
+  if ($state.Skipped) {
+    $state.Skipped | Select-Object Export, Reason | Format-SpectreTable -Title 'Not part of the lab (skipped)' -Color Grey
+  }
   $plan | ForEach-Object { [pscustomobject]@{ 'Golden VM' = $_.Name; 'Deploys as' = $_.NewName; 'Folder' = $_.Dir } } |
     Format-SpectreTable -Title 'Deployment plan' -Color DeepSkyBlue1
 
