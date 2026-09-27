@@ -3,19 +3,21 @@
 #Requires -Version 7.4
 #Requires -Modules PwshSpectreConsole
 
-# Remote-run copy of import-golden-vms.ps1 with a richer terminal UI. Run it
-# on your workstation. It connects to the Hyper-V host over WinRM HTTPS, then
-# imports every VM exported under C:\Users\Public\Documents\Hyper-V\Golden on the host, renames it to
-# <your name>_JCLab_<name>, and starts it. The golden exports stay
-# untouched.
+# Terminal UI version of import-golden-vms.ps1 that runs on your workstation.
+# It connects to the Hyper-V host over WinRM HTTPS, then imports every VM
+# exported under C:\Users\Public\Documents\Hyper-V\Golden on the host, renames it to <your name>_JCLab_<name>,
+# and starts it. The golden exports stay untouched. Both scripts run the same
+# host-side steps from JCLab.Host.ps1.
 #
 # The UI comes from PwshSpectreConsole (MIT license, wraps Spectre.Console).
 # It needs PowerShell 7.4 or later on your workstation only. The host needs
 # nothing new. One-time setup on the workstation:
 #   Install-Module PwshSpectreConsole -Scope CurrentUser
 #
-# Before it asks for credentials, the script validates the host's SSL
-# certificate on the WinRM HTTPS listener (port 5986).
+# Before it asks for credentials, the script checks the host's SSL
+# certificate on the WinRM HTTPS listener (port 5986). If the certificate
+# isn't trusted, for example because it's self-signed, the script shows the
+# error and asks whether to skip certificate checks. The default is No.
 #
 # Credentials: the script asks with Get-Credential, which keeps the password
 # in a SecureString inside a PSCredential. It never converts the password to
@@ -28,10 +30,6 @@
 #   .\import-golden-vms-remote.ps1 -ComputerName hyperv01 -UserName jdoe
 #   .\import-golden-vms-remote.ps1 -ComputerName hyperv01.example.local -SkipCertificateCheck   # self-signed cert, no prompt
 #   .\import-golden-vms-remote.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
-#
-# If the host's certificate isn't trusted (for example, self-signed), the
-# script explains the error and asks whether to skip certificate checks.
-# The default answer is No.
 param(
   [string]$ComputerName,
   # Pass a PSCredential, or a user name to be prompted for its password
