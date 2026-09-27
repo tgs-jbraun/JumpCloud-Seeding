@@ -73,7 +73,7 @@ ui_box() {
   else print -l -- '' "$@" ''; fi
 }
 
-# Reads a line into REPLY, offering $2 as the default. zsh shows read's own
+# Reads a line into REPLY, offering $2 (can be empty) as the default. zsh shows read's own
 # prompt only in interactive shells, so print it separately.
 ui_input() {
   if (( has_gum )); then REPLY=$(gum input --header "$1" --value "$2" --placeholder "$1"); return; fi
@@ -165,8 +165,8 @@ end run'
 last_tech=$(defaults read $prefs TechName 2>/dev/null) || last_tech=''
 last_golden=$(defaults read $prefs GoldenVM 2>/dev/null) || last_golden=JCLab-macOS-Golden
 
-if [[ -z $tech ]]; then ui_input 'Your name (added to the VM name)' $last_tech; tech=$REPLY; fi
-if [[ -z $golden ]]; then ui_input 'Golden VM in UTM' $last_golden; golden=$REPLY; fi
+if [[ -z $tech ]]; then ui_input 'Your name (added to the VM name)' "$last_tech"; tech=$REPLY; fi
+if [[ -z $golden ]]; then ui_input 'Golden VM in UTM' "$last_golden"; golden=$REPLY; fi
 
 # The name becomes part of the VM name, so keep it to safe characters
 tech=${${tech## #}%% #}; tech=${tech// /-}
