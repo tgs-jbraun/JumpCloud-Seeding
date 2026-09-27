@@ -46,7 +46,7 @@ $ErrorActionPreference = 'Stop'
 
 function Esc($text) { Get-SpectreEscapedText -Text "$text" }
 
-# Pop-culture facts shown under the progress bars during the copy, in random
+# Pop-culture facts shown in a box below the VM table during the copy, in random
 # order. Each line of the file is "sentence | sentence | source".
 $factsFile = Join-Path $PSScriptRoot 'pop-culture-facts.txt'
 $facts = @(if (Test-Path $factsFile) {
@@ -269,52 +269,80 @@ try {
     if ($answer -eq $delete) { return }
   }
 
-  # Import: one progress bar per VM. Results print after the bars finish.
+  # Import. A live view shows the VMs in their own table and the pop-culture
+  # fact in a separate box below it, so the fact can't be mistaken for a VM.
+  # Results print after the live view ends.
   $results = [System.Collections.Generic.List[object]]::new()
-  Invoke-SpectreCommandWithProgress -ScriptBlock {
-    param([Spectre.Console.ProgressContext]$Context)
-    $tasks = @{}
-    foreach ($p in $plan) { $tasks[$p.NewName] = $Context.AddTask((Esc $p.NewName)) }
+  $vmState = @{}
+  foreach ($p in $plan) { $vmState[$p.NewName] = @{ Percent = 0; Status = '[grey]Queued[/]' } }
+  $factSeconds = 15
+  $fact = $null
+  $factShownAt = Get-Date
 
-    # Two lines under the bars for the current fact, one sentence each
-    # Spectre rejects blank task names, so start with placeholder text.
-    # Show-Fact replaces it right away.
-    $factLines = @(if ($facts) { $Context.AddTask('Did you know?'); $Context.AddTask('...') })
-    $factLines | ForEach-Object { $_.IsIndeterminate = $true }
-    function Show-Fact {
-      if (-not $factLines) { return }
-      $fact = $facts[$script:nextFact++ % $facts.Count]
-      $factLines[0].Description = "[deepskyblue1]Did you know?[/] $(Esc $fact.One)"
-      $factLines[1].Description = "[grey]$(Esc $fact.Two)[/]"
+  # Text progress bar: a line of box-drawing characters filled to the percent
+  function Get-Bar($percent, $width) {
+    $filled = [int][Math]::Round($width * $percent / 100)
+    $line = [string][char]0x2501
+    "[deepskyblue1]$($line * $filled)[/][grey]$($line * ($width - $filled))[/] $([int]$percent)%"
+  }
+  function Show-Fact {
+    if (-not $facts) { return }
+    $script:fact = $facts[$script:nextFact++ % $facts.Count]
+    $script:factShownAt = Get-Date
+  }
+  function Get-LiveView {
+    $table = @(foreach ($p in $plan) {
+      $s = $vmState[$p.NewName]
+      [pscustomobject]@{ 'Lab VM' = (Esc $p.NewName); Progress = (Get-Bar $s.Percent 30); Status = $s.Status }
+    }) | Format-SpectreTable -AllowMarkup -Title 'Deploying lab VMs' -Color DeepSkyBlue1
+    if (-not $fact) { return $table }
+    # The box's bar counts up to the next fact, 0% to 100% in $factSeconds
+    $elapsed = [Math]::Min($factSeconds, ((Get-Date) - $factShownAt).TotalSeconds)
+    $factBox = "$(Esc $fact.One)`n[grey]$(Esc $fact.Two)[/]`n`n[grey]Next fact[/]  $(Get-Bar (100 * $elapsed / $factSeconds) 20)" |
+      Format-SpectrePanel -Header 'While you wait: did you know?' -Border Rounded -Color Grey
+    @($table, $factBox) | Format-SpectreRows
+  }
+
+  Show-Fact
+  Invoke-SpectreLive -Data (Get-LiveView) -ScriptBlock {
+    param([Spectre.Console.LiveDisplayContext]$Context)
+    # Sets one VM's row (if named), moves to the next fact when its time is
+    # up, and redraws
+    function Update-View($name, $percent, $status) {
+      if ($name) { $vmState[$name].Percent = $percent; $vmState[$name].Status = $status }
+      if ($fact -and ((Get-Date) - $factShownAt).TotalSeconds -ge $factSeconds) { Show-Fact }
+      $Context.UpdateTarget((Get-LiveView))
+      $Context.Refresh()
     }
-    Show-Fact
 
     foreach ($p in $plan) {
-      $task = $tasks[$p.NewName]
+      $n = $p.NewName
       try {
+        Update-View $n 0 '[yellow]Checking[/]'
         $problems = @(Invoke-Command -Session $Session -ScriptBlock $remoteCheck -ArgumentList $p.ConfigPath, $p.Dir)
-        $task.Increment(10)
         if ($problems) {
-          $results.Add([pscustomobject]@{ VM = (Esc $p.NewName); Result = "[yellow]Skipped[/]: $(Esc ($problems -join '; '))" })
-          $task.Value = 100
+          Update-View $n 100 '[yellow]Skipped[/]'
+          $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[yellow]Skipped[/]: $(Esc ($problems -join '; '))" })
           continue
         }
-        # Run the copy as a job so the fact can change every 15 seconds meanwhile
+        Update-View $n 10 '[deepskyblue1]Copying VM and disks[/]'
+        # Run the copy as a job so the view can redraw once a second meanwhile
         $job = Invoke-Command -Session $Session -ScriptBlock $remoteImport -ArgumentList $p.ConfigPath, $p.Dir -AsJob
-        while (-not (Wait-Job $job -Timeout 15)) { Show-Fact }
+        while (-not (Wait-Job $job -Timeout 1)) { Update-View }
         $id = Receive-Job $job -Wait -AutoRemoveJob
-        $task.Increment(80)
+        Update-View $n 90 '[deepskyblue1]Starting[/]'
         Invoke-Command -Session $Session -ScriptBlock $remoteStart -ArgumentList $id, $p.NewName
-        $task.Increment(10)
-        $results.Add([pscustomobject]@{ VM = (Esc $p.NewName); Result = '[green]Imported and started[/]' })
+        Update-View $n 100 '[green]Imported and started[/]'
+        $results.Add([pscustomobject]@{ VM = (Esc $n); Result = '[green]Imported and started[/]' })
       }
       catch {
-        $results.Add([pscustomobject]@{ VM = (Esc $p.NewName); Result = "[red]Failed[/]: $(Esc $_.Exception.Message)" })
-        $task.Value = 100
+        Update-View $n 100 '[red]Failed[/]'
+        $results.Add([pscustomobject]@{ VM = (Esc $n); Result = "[red]Failed[/]: $(Esc $_.Exception.Message)" })
       }
     }
-    # Settle the fact lines so the final frame shows them as done
-    $factLines | ForEach-Object { $_.IsIndeterminate = $false; $_.Value = $_.MaxValue }
+    # Final frame: the VM table only
+    $script:fact = $null
+    Update-View
   }
   $results | Format-SpectreTable -Title 'Results' -AllowMarkup -Color DeepSkyBlue1
 }

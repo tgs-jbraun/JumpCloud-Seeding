@@ -27,7 +27,7 @@ have.
 | Script | Runs on | Needs | Interface |
 |---|---|---|---|
 | [`import-golden-vms.ps1`](hyper-v/import-golden-vms.ps1) | The Hyper-V host, or remotely over WinRM HTTPS | Windows PowerShell 5.1, built in. Run it elevated on the host. | Plain prompts and a progress bar |
-| [`import-golden-vms-remote.ps1`](hyper-v/import-golden-vms-remote.ps1) | Your workstation, connecting to the host over WinRM HTTPS | PowerShell 7.4 and the [PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole) module | Tables, menus, spinners and a progress bar per VM |
+| [`import-golden-vms-remote.ps1`](hyper-v/import-golden-vms-remote.ps1) | Your workstation, connecting to the host over WinRM HTTPS | PowerShell 7.4 and the [PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole) module | Tables, menus, spinners and a live deployment table |
 
 To run the remote version, install the module once, then start the script:
 
@@ -48,10 +48,12 @@ The remote version walks through these steps in a terminal UI:
 4. Shows the deployment plan as a table.
 5. If you already have lab VMs or folders, lists them and offers Cancel,
    Redeploy or Delete in an arrow-key menu.
-6. Imports each VM with its own progress bar, then shows a results table.
+6. Imports the VMs in a live "Deploying lab VMs" table, with a progress bar
+   and status for each VM, then shows a results table.
 
 While the disks copy, the remote version shows random two-sentence pop-culture
-facts from [`hyper-v/pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt). Each
+facts in a separate "While you wait" box below the VM table, so they can't be
+mistaken for VMs. The facts come from [`hyper-v/pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt). Each
 fact names its Wikipedia source. Add a line to the file to add a fact.
 
 The comments at the top of each script list all options.
