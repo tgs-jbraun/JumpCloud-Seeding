@@ -71,12 +71,21 @@ On a Mac with UTM, [`deploy-macos-vm.zsh`](utm-qemu/deploy-macos-vm.zsh)
 duplicates a golden macOS VM that you build once in UTM, then starts the copy.
 Build the golden VM first, as the comments at the top of the script describe.
 Like the Hyper-V scripts, it remembers your name, shows the plan, and asks
-before it changes a lab VM you already have. Install
-[gum](https://github.com/charmbracelet/gum) (`brew install gum`) for menus,
-spinners and the pop-culture fact box. Without gum it uses plain prompts.
+before it changes a lab VM you already have. It needs
+[gum](https://github.com/charmbracelet/gum) (`brew install gum`) for its menus,
+spinners and the pop-culture fact box.
 
 ```bash
 ./utm-qemu/deploy-macos-vm.zsh
+```
+
+To run it from Windows over SSH, use
+[`deploy-macos-vm-remote.ps1`](utm-qemu/deploy-macos-vm-remote.ps1). The Mac
+needs automatic login and Remote Login turned on. On the first run, click
+Allow on the Mac's screen when macOS asks whether SSH may control UTM.
+
+```powershell
+.\utm-qemu\deploy-macos-vm-remote.ps1 -ComputerName mac-mini.local -User labadmin
 ```
 
 The comments at the top of each script list all options.

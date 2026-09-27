@@ -28,10 +28,9 @@
 # time, shows the plan first, and asks before it changes a lab VM you already
 # have: redeploy it, delete it, or cancel.
 #
-# Menus, spinners and boxes come from gum (MIT license, Charmbracelet), if
-# installed: brew install gum. Without gum, the script uses plain prompts.
-# With gum, it also shows a pop-culture fact from
-# ../hyper-v/pop-culture-facts.txt while the VM starts.
+# Menus, spinners and boxes come from gum (MIT license, Charmbracelet):
+# brew install gum. While the VM starts, it shows a pop-culture fact from
+# ../hyper-v/pop-culture-facts.txt.
 #
 # Requirements: a Mac with Apple silicon, UTM in /Applications, and
 # permission for this terminal to control UTM when macOS asks (Automation).
@@ -55,7 +54,11 @@ while getopts 'n:g:' opt; do
   esac
 done
 
-cores=4 memory=4096
+# Commands run over SSH skip ~/.zprofile, where Homebrew adds its path, so
+# look there for gum too
+typeset -U path; path+=(/opt/homebrew/bin)
+
+cores=4 memory=4096   # also set in as_duplicate
 prefs=JumpCloud-Seeding   # defaults domain: ~/Library/Preferences/JumpCloud-Seeding.plist
 
 die() { print -u2 -P "%F{red}Error:%f $1"; exit 1 }
@@ -63,41 +66,11 @@ die() { print -u2 -P "%F{red}Error:%f $1"; exit 1 }
 [[ $(uname -m) == arm64 ]] || die 'macOS VMs need a Mac with Apple silicon.'
 [[ -d /Applications/UTM.app ]] || die 'UTM not found in /Applications. Install it from https://mac.getutm.app'
 
-# --- UI helpers: gum when installed, plain zsh otherwise ---------------------
+(( $+commands[gum] )) || die 'gum not found. Install it with: brew install gum'
 
-(( $+commands[gum] )) && has_gum=1 || has_gum=0
-
-# Prints a bordered box of lines
-ui_box() {
-  if (( has_gum )); then gum style --border rounded --border-foreground 39 --padding '0 1' -- "$@"
-  else print -l -- '' "$@" ''; fi
-}
-
-# Reads a line into REPLY, offering $2 (can be empty) as the default. zsh shows read's own
-# prompt only in interactive shells, so print it separately.
-ui_input() {
-  if (( has_gum )); then REPLY=$(gum input --header "$1" --value "$2" --placeholder "$1"); return; fi
-  print -u2 -n -- "$1${2:+ [$2]}: "; read -r REPLY; REPLY=${REPLY:-$2}
-}
-
-# Prints the chosen option. The first option is the default.
-ui_choose() {
-  local header=$1 i=0 opt; shift
-  if (( has_gum )); then gum choose --header "$header" -- "$@"; return; fi
-  print -u2 -- $header
-  for opt; do print -u2 -- "  $((++i))) $opt"; done
-  while true; do
-    print -u2 -n 'Number [1]: '; read -r REPLY; REPLY=${REPLY:-1}
-    [[ $REPLY == <1-> ]] && (( REPLY <= $# )) && { print -- ${@[REPLY]}; return }
-  done
-}
-
-# Runs a command with a spinner and passes its output through
-ui_spin() {
-  local title=$1; shift
-  if (( has_gum )); then gum spin --spinner dot --title "$title" --show-output -- "$@"
-  else print -u2 -- "$title"; "$@"; fi
-}
+# A bordered box of lines, and a spinner that passes the command's output through
+box() { gum style --border rounded --border-foreground 39 --padding '0 1' -- "$@" }
+spin() { local title=$1; shift; gum spin --spinner dot --title "$title" --show-output -- "$@" }
 
 # --- AppleScripts, run with osascript -e script args... -----------------------
 
@@ -137,9 +110,9 @@ end run'
 
 as_duplicate='
 on run argv
-  set {goldenName, vmName, vmMac, vmCores, vmMemory} to argv
+  set {goldenName, vmName, vmMac} to argv
   tell application "UTM"
-    duplicate (virtual machine named goldenName) with properties {configuration:{name:vmName, cpu cores:(vmCores as integer), memory:(vmMemory as integer), network interfaces:{{index:0, address:vmMac}}}}
+    duplicate (virtual machine named goldenName) with properties {configuration:{name:vmName, cpu cores:4, memory:4096, network interfaces:{{index:0, address:vmMac}}}}
   end tell
 end run'
 
@@ -157,16 +130,14 @@ end run'
 
 # --- Name and golden VM, remembered from the last run ------------------------
 
-(( has_gum )) && gum style --bold --foreground 39 --border double --border-foreground 39 \
-  --align center --width 44 --padding '1 2' 'JumpCloud Lab' 'UTM macOS deploy' \
-  || print -P '%B%F{cyan}JumpCloud Lab: UTM macOS deploy%f%b'
-(( has_gum )) || print -P '%F{242}Tip: brew install gum for menus and spinners.%f'
+gum style --bold --foreground 39 --border double --border-foreground 39 \
+  --align center --width 44 --padding '1 2' 'JumpCloud Lab' 'UTM macOS deploy'
 
 last_tech=$(defaults read $prefs TechName 2>/dev/null) || last_tech=''
 last_golden=$(defaults read $prefs GoldenVM 2>/dev/null) || last_golden=JCLab-macOS-Golden
 
-if [[ -z $tech ]]; then ui_input 'Your name (added to the VM name)' "$last_tech"; tech=$REPLY; fi
-if [[ -z $golden ]]; then ui_input 'Golden VM in UTM' "$last_golden"; golden=$REPLY; fi
+[[ -n $tech ]] || tech=$(gum input --header 'Your name (added to the VM name)' --value "$last_tech")
+[[ -n $golden ]] || golden=$(gum input --header 'Golden VM in UTM' --value "$last_golden")
 
 # The name becomes part of the VM name, so keep it to safe characters
 tech=${${tech## #}%% #}; tech=${tech// /-}
@@ -174,7 +145,7 @@ tech=${${tech## #}%% #}; tech=${tech// /-}
 [[ -n $golden ]] || die 'No golden VM given.'
 name=${tech}_JCLab_macOS
 
-state=($(ui_spin 'Reading VMs in UTM' osascript -e $as_state $golden $name))
+state=($(spin 'Reading VMs in UTM' osascript -e $as_state $golden $name))
 golden_state=$state[1] lab_state=$state[2]
 case $golden_state in
   missing) die "No VM named $golden in UTM. Build it first (see the top of this script) or pass -g." ;;
@@ -185,20 +156,20 @@ esac
 defaults write $prefs TechName -string $tech
 defaults write $prefs GoldenVM -string $golden
 
-ui_box 'Deployment plan' '' "Golden VM   $golden" "Deploys as  $name" "CPU / RAM   $cores cores, $memory MiB" 'Network     Shared (NAT), new random MAC'
+box 'Deployment plan' '' "Golden VM   $golden" "Deploys as  $name" "CPU / RAM   $cores cores, $memory MiB" 'Network     Shared (NAT), new random MAC'
 
 # --- Pre-deployment check ------------------------------------------------------
 
 if [[ $lab_state != missing ]]; then
   print -P "%F{yellow}You already have $name%f ($lab_state)."
-  answer=$(ui_choose 'Existing lab VM found. What do you want to do?' \
+  answer=$(gum choose --header 'Existing lab VM found. What do you want to do?' -- \
     'Cancel: change nothing' \
     'Redeploy: stop and delete it, then deploy a fresh copy' \
     'Delete: stop and delete it, then stop')
   case $answer in
     Cancel*) print -P '%F{242}Cancelled. Nothing changed.%f'; exit 0 ;;
   esac
-  ui_spin "Stopping and deleting $name through UTM" osascript -e $as_delete $name
+  spin "Stopping and deleting $name through UTM" osascript -e $as_delete $name
   print -P "%F{red}Deleted%f $name"
   [[ $answer == Delete* ]] && exit 0
 fi
@@ -207,11 +178,11 @@ fi
 
 # Random locally administered unicast MAC: set bit 1, clear bit 0 of the first octet
 mac=$(printf '%02x:%02x:%02x:%02x:%02x:%02x' $(( (RANDOM & 0xfc) | 0x02 )) $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)))
-ui_spin "Duplicating $golden as $name" osascript -e $as_duplicate $golden $name $mac $cores $memory
+spin "Duplicating $golden as $name" osascript -e $as_duplicate $golden $name $mac
 
-# A random two-sentence fact in its own box while the VM starts (gum only)
+# A random two-sentence fact in its own box while the VM starts
 facts_file=${0:A:h}/../hyper-v/pop-culture-facts.txt
-if (( has_gum )) && [[ -r $facts_file ]]; then
+if [[ -r $facts_file ]]; then
   facts=(${(f)"$(<$facts_file)"}); facts=(${facts:#(\#*|)})
   if (( $#facts )); then
     fact=(${(s:|:)facts[RANDOM % $#facts + 1]})
@@ -222,14 +193,14 @@ fi
 
 # A start can fail right after the duplicate with "Connection is invalid"
 # (-609). It works on a retry, so try once more after a short pause.
-started=$(ui_spin "Starting $name" osascript -e $as_start $name) || started=failed
+started=$(spin "Starting $name" osascript -e $as_start $name) || started=failed
 if [[ $started != started ]]; then
   print -P "%F{yellow}First start didn't finish ($started). Retrying in 5 seconds.%f"
   sleep 5
-  started=$(ui_spin "Starting $name (retry)" osascript -e $as_start $name) || started=failed
+  started=$(spin "Starting $name (retry)" osascript -e $as_start $name) || started=failed
 fi
 
 if [[ $started == started ]]; then result='%F{green}Deployed and started%f'
 else result="%F{red}Deployed, but it didn't start ($started)%f. Start it from UTM's window."; fi
-ui_box 'Results' '' "VM          $name" "CPU / RAM   $cores cores, $memory MiB" "MAC         $mac" "Status      ${(%)result}"
+box 'Results' '' "VM          $name" "CPU / RAM   $cores cores, $memory MiB" "MAC         $mac" "Status      ${(%)result}"
 [[ $started == started ]]
