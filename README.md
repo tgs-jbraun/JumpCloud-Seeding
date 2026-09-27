@@ -67,6 +67,18 @@ pop-culture fact in a separate "While you wait" box below the VM table, so
 nobody mistakes a fact for a VM. The facts come from
 [`pop-culture-facts.txt`](hyper-v/pop-culture-facts.txt), and each names its
 Wikipedia source. To add a fact, add a line to the file.
+On a Mac with UTM, [`deploy-macos-vm.zsh`](utm-qemu/deploy-macos-vm.zsh)
+duplicates a golden macOS VM that you build once in UTM, then starts the copy.
+Build the golden VM first, as the comments at the top of the script describe.
+Like the Hyper-V scripts, it remembers your name, shows the plan, and asks
+before it changes a lab VM you already have. Install
+[gum](https://github.com/charmbracelet/gum) (`brew install gum`) for menus,
+spinners and the pop-culture fact box. Without gum it uses plain prompts.
+
+```bash
+./utm-qemu/deploy-macos-vm.zsh
+```
+
 The comments at the top of each script list all options.
 
 The comments in each folder's files list the manual steps the tools can't do.
