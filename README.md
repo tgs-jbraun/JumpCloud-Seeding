@@ -9,7 +9,7 @@ Each folder deploys the lab on one hypervisor.
 |---|---|---|
 | [`xo/`](xo) | XCP-ng with Xen Orchestra | Terraform, `vatesfr/xenorchestra` provider |
 | [`hyper-v/`](hyper-v) | Microsoft Hyper-V | PowerShell scripts that import golden VM exports |
-| [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | A zsh script that duplicates a golden macOS VM into 2 lab VMs |
+| [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | A zsh script that duplicates a golden macOS VM into a lab VM |
 
 On Xen Orchestra, run Terraform from `xo/`:
 
