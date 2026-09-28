@@ -72,11 +72,21 @@ While the disks copy, a separate "While you wait" box below the table shows a ra
    ```
 
 3. In Xen Orchestra, open Import > Disk, pick the storage repository and upload each VHD.
-4. Create a VM from a template without disks, attach the imported disk, start the VM and install the guest tools.
+4. Create a VM from a template without disks.
+5. Attach the imported disk to the VM, then start it.
+6. Install the XCP-ng guest tools in the VM.
 
-The script skips a disk, and says why, if it is larger than 2040 GiB (the VHD limit), has 4096-byte logical sectors (VHD needs 512), is a checkpoint disk (delete the VM's checkpoints first, so Hyper-V merges them), or belongs to a running VM. It won't replace an existing VHD unless you add `-Force`.
+The script skips a disk, and says why, if the disk:
+
+- is larger than 2040 GiB, the VHD format's limit
+- has 4096-byte logical sectors, which VHD doesn't support
+- is a checkpoint disk. Delete the VM's checkpoints first, so Hyper-V merges them.
+- belongs to a running VM
+
+It doesn't replace an existing VHD unless you add `-Force`.
 
 To copy the VHDs straight into a file-based storage repository instead of importing them, add `-XcpNaming`. Each VHD is then named `<UUID>.vhd`, the only name XCP-ng accepts there, and `mapping.csv` records which VHDX each UUID came from. Rescan the storage repository after copying.
+
 ## Set up WinRM over HTTPS on the host
 
 The remote import connects only over HTTPS. Run this once, elevated, on the Hyper-V host:
