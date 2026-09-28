@@ -9,7 +9,7 @@
 # anything.
 #
 # Run it on the Hyper-V host in an elevated PowerShell, with JCLab.Host.ps1
-# next to it. To run from your workstation, use import-golden-vms-remote.ps1.
+# next to it. To run from your workstation, use jclab.py in the repo root.
 # It prompts for your name unless you pass -UserName.
 #
 #   .\import-golden-vms.ps1

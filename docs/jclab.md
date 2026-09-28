@@ -16,7 +16,7 @@ On start it shows which hypervisors this machine can drive, and why not for the 
 | Hypervisor | Needs on this machine | Runs |
 |---|---|---|
 | Xen Orchestra | Terraform | `terraform` in `xo/` |
-| Hyper-V | PowerShell 7.4, or Windows PowerShell 5.1 on the host | [`import-golden-vms-remote.ps1`](../hyper-v/import-golden-vms-remote.ps1), or [`import-golden-vms.ps1`](../hyper-v/import-golden-vms.ps1) on the host |
+| Hyper-V | PowerShell 7.4, or Windows PowerShell 5.1 on the host | Its own remote import UI, with [`JCLab.Bridge.ps1`](../hyper-v/JCLab.Bridge.ps1) for the PowerShell calls, or [`import-golden-vms.ps1`](../hyper-v/import-golden-vms.ps1) on the host |
 | UTM | On a Mac: zsh, UTM and gum. On Windows: the OpenSSH client. | [`deploy-macos-vm.zsh`](../utm-qemu/deploy-macos-vm.zsh), or [`deploy-macos-vm-remote.ps1`](../utm-qemu/deploy-macos-vm-remote.ps1) over SSH |
 
 Press Ctrl+C in any prompt to go back to the menu. Prompts show the last answer as a default, so Enter keeps it.
@@ -25,11 +25,11 @@ Press Ctrl+C in any prompt to go back to the menu. Prompts show the last answer 
 
 1. Pick an action: plan and then apply after review, plan only, destroy the lab, or only save the settings.
 2. Answer the prompts for each variable in `terraform.tfvars`. The defaults come from your current `xo/terraform.tfvars`, then from the example file. For the SSH key, pick one of the `.pub` files in `~/.ssh` or none.
-3. Enter the XO password. If `terraform.tfvars` already holds one, you can keep it there instead.
-4. Review the settings table and confirm. The wrapper writes `xo/terraform.tfvars`.
+3. Enter the XO password. If `terraform.tfvars` already holds one, answer yes to keep it there instead.
+4. Review the settings table and confirm. jclab.py writes `xo/terraform.tfvars`.
 5. It runs `terraform init` behind a spinner, with a pop-culture fact, then `terraform plan`. After you review the plan, it asks whether to apply it.
 
-The wrapper never writes a password you enter to disk. Terraform gets it through the `TF_VAR_xoa_password` environment variable, and only while its commands run. `terraform.tfvars` values beat environment variables, so a password you keep in the file stays the one Terraform uses. The saved plan file holds the password too, so the wrapper deletes it straight after the apply, or when you decline, and Git ignores `*.tfplan`.
+jclab.py never writes a password you enter to disk. Terraform gets it through the `TF_VAR_xoa_password` environment variable, and only while its commands run. `terraform.tfvars` values beat environment variables, so a password you keep in the file stays the one Terraform uses. The saved plan file holds the password too, so jclab.py deletes it straight after the apply, or when you decline, and Git ignores `*.tfplan`.
 
 ## Hyper-V
 
@@ -37,7 +37,7 @@ The wrapper never writes a password you enter to disk. Terraform gets it through
 2. Enter your name, the host (remote only), the golden export and lab folders, and how many VMs import at once.
 3. Review and confirm.
 
-The script then takes over the terminal. The remote script needs the PwshSpectreConsole module (`Install-Module PwshSpectreConsole -Scope CurrentUser`) and runs its own certificate check, credential prompt and live table, as described on the [Hyper-V](hyper-v.md) page. On the host, run the wrapper in an elevated terminal.
+From the workstation, jclab.py checks the certificate, asks for the account, and shows the plan, the pre-deployment check and a live import table. PowerShell asks for the password, and it never reaches jclab.py. The [Hyper-V](hyper-v.md) page has the details. On the host, jclab.py runs the host script, so start jclab.py in an elevated terminal.
 
 ## UTM
 
@@ -45,7 +45,7 @@ The script then takes over the terminal. The remote script needs the PwshSpectre
 2. From Windows, also enter the Mac, the account on it and the repo path on it.
 3. Review and confirm.
 
-On a Mac the wrapper runs the zsh script. From Windows it runs the SSH launcher, so the Mac setup on the [UTM on macOS](utm-macos.md) page applies, including the one-time Allow click on the Mac.
+On a Mac, jclab.py runs the zsh script. From Windows it runs the SSH launcher, so the Mac setup on the [UTM on macOS](utm-macos.md) page applies, including the one-time Allow click on the Mac.
 
 ## What it remembers
 

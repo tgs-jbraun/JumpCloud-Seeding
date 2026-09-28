@@ -8,8 +8,9 @@ then runs the tool that does the work:
 
   Xen Orchestra  Writes xo/terraform.tfvars, then runs terraform plan, apply
                  or destroy.
-  Hyper-V        Runs hyper-v/import-golden-vms-remote.ps1 from a workstation,
-                 or import-golden-vms.ps1 on the host.
+  Hyper-V        From a workstation, draws the import UI itself and runs the
+                 PowerShell calls through hyper-v/JCLab.Bridge.ps1. On the
+                 host, runs hyper-v/import-golden-vms.ps1.
   UTM            Runs utm-qemu/deploy-macos-vm.zsh on a Mac, or
                  deploy-macos-vm-remote.ps1 from Windows over SSH.
 
@@ -24,15 +25,19 @@ Run it from anywhere in the repo:
 
 It remembers your answers for next time. It never saves passwords: the XO
 password goes to Terraform as the TF_VAR_xoa_password environment variable,
-and the Hyper-V and UTM scripts ask for their own credentials.
+the Hyper-V password stays in PowerShell (Get-Credential, as a SecureString),
+and the UTM launcher's ssh asks for its own.
 """
 
 import json
 import os
 import random
 import re
+import secrets
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from shutil import which
 
@@ -42,7 +47,9 @@ try:
     from rich import box
     from rich.align import Align
     from rich.console import Console, Group
+    from rich.live import Live
     from rich.panel import Panel
+    from rich.progress_bar import ProgressBar
     from rich.table import Table
     from rich.text import Text
 except ImportError:
@@ -141,6 +148,22 @@ def banner():
     console.print(Align.center(Panel.fit(title, box=box.DOUBLE, border_style=ACCENT, padding=(1, 6))))
 
 
+def make_table(title, columns, colour=ACCENT):
+    """A rounded table whose title stays on one line"""
+    table = Table(title=title, title_style=f"bold {colour}", box=box.ROUNDED, border_style=colour,
+                  min_width=len(title) + 4)
+    for column in columns:
+        table.add_column(column)
+    return table
+
+
+def print_table(title, columns, rows, colour=ACCENT):
+    table = make_table(title, columns, colour)
+    for row in rows:
+        table.add_row(*row)
+    console.print(table)
+
+
 def settings_table(title, rows):
     table = Table(title=title, title_style=f"bold {ACCENT}", box=box.ROUNDED, border_style=ACCENT,
                   show_header=False)
@@ -159,18 +182,30 @@ def result(code, what):
                             border_style="red", box=box.ROUNDED))
 
 
-def show_fact():
-    """A random pop-culture fact in its own box, from the file the Hyper-V
-    remote script uses. Shows nothing if the file is missing."""
+def load_facts():
+    """Pop-culture facts from hyper-v/pop-culture-facts.txt, shuffled, as
+    (sentence, sentence) pairs. Empty if the file is missing."""
     try:
         lines = (REPO / "hyper-v" / "pop-culture-facts.txt").read_text(encoding="utf-8").splitlines()
     except OSError:
-        return
-    facts = [line.split("|") for line in lines if line.strip() and not line.startswith("#")]
+        return []
+    facts = [tuple(part.strip() for part in line.split("|")[:2])
+             for line in lines if line.strip() and not line.startswith("#")]
+    random.shuffle(facts)
+    return facts
+
+
+def fact_panel(fact, footer=None):
+    """A fact in its own box, so nobody mistakes it for a VM or a result"""
+    body = [Text(fact[0]), Text(fact[1], style="grey62")] + ([Text(""), footer] if footer else [])
+    return Panel(Group(*body), title="While you wait: did you know?", title_align="left",
+                 border_style="grey50", box=box.ROUNDED, width=76)
+
+
+def show_fact():
+    facts = load_facts()
     if facts:
-        one, two = (part.strip() for part in random.choice(facts)[:2])
-        console.print(Panel(f"{one}\n[grey62]{two}[/]", title="While you wait: did you know?", title_align="left",
-                            border_style="grey50", box=box.ROUNDED, width=76))
+        console.print(fact_panel(facts[0]))
 
 
 def run(command, env=None):
@@ -325,7 +360,7 @@ def xen_orchestra():
 def hyper_v():
     modes = []
     if which("pwsh"):
-        modes.append(Choice("From this workstation, over WinRM HTTPS (PowerShell 7.4, TUI)", "remote"))
+        modes.append(Choice("From this workstation, over WinRM HTTPS (PowerShell 7.4)", "remote"))
     if IS_WINDOWS:
         modes.append(Choice("On this Hyper-V host (Windows PowerShell 5.1)", "local"))
     hv = state.setdefault("hyperv", {})
@@ -349,12 +384,215 @@ def hyper_v():
     args = ["-UserName", name, "-Source", source, "-Destination", destination, "-ThrottleLimit", throttle]
 
     if mode == "local":
-        command = powershell("hyper-v/import-golden-vms.ps1", *args)
-    else:
-        hv["host"] = host
-        command = powershell("hyper-v/import-golden-vms-remote.ps1", "-ComputerName", host, *args, edition="pwsh")
+        save_state()
+        return result(run(powershell("hyper-v/import-golden-vms.ps1", *args)), "The import")
+    hv["host"] = host
     save_state()
-    result(run(command), "The import")
+    try:
+        with Bridge() as bridge:
+            hyper_v_remote(bridge, host, name, source, destination, int(throttle))
+    except HostError as error:
+        console.print(Panel(Text(str(error)), title="PowerShell reported an error", title_align="left",
+                            border_style="red", box=box.ROUNDED))
+
+
+class HostError(Exception):
+    """An error PowerShell reported, on the workstation or on the host"""
+
+
+class Bridge:
+    """The PowerShell 7 helper, hyper-v/JCLab.Bridge.ps1, which runs the
+    certificate check, Get-Credential, the HTTPS session and the host
+    functions. It shares this terminal, so Get-Credential prompts here, and
+    the password stays in PowerShell as a SecureString.
+
+    It connects back over loopback TCP and proves who it is with a token
+    passed in its environment."""
+
+    def __enter__(self):
+        server = socket.create_server(("127.0.0.1", 0))
+        token = secrets.token_hex(16)
+        env = {**os.environ, "JCLAB_BRIDGE_PORT": str(server.getsockname()[1]), "JCLAB_BRIDGE_TOKEN": token}
+        self.process = subprocess.Popen(powershell("hyper-v/JCLab.Bridge.ps1", edition="pwsh"), cwd=REPO, env=env)
+        server.settimeout(60)
+        try:
+            connection = server.accept()[0]
+        except socket.timeout:
+            self.process.kill()
+            raise HostError("The PowerShell helper didn't start. It needs PowerShell 7.4 or later.")
+        finally:
+            server.close()
+        self.stream = connection.makefile("rw", encoding="utf-8", newline="\n")
+        if self.stream.readline().strip() != token:
+            self.process.kill()
+            raise HostError("Something other than the PowerShell helper connected. Stopped.")
+        return self
+
+    def send(self, cmd, **fields):
+        self.stream.write(json.dumps({"cmd": cmd, **fields}) + "\n")
+        self.stream.flush()
+        reply = json.loads(self.stream.readline() or '{"ok": false, "error": "The PowerShell helper stopped."}')
+        if not reply["ok"]:
+            raise HostError(reply["error"])
+        return reply.get("result")
+
+    def call(self, function, *args):
+        """Runs a JCLab.Host.ps1 function on the host. Returns its output as a list."""
+        return json.loads(self.send("call", function=function, args=list(args)))
+
+    def __exit__(self, *_):
+        try:
+            self.send("close")
+        except (HostError, OSError, ValueError):
+            pass
+        self.process.wait(timeout=30)
+
+
+def hyper_v_remote(bridge, host, name, source, destination, throttle):
+    """The remote import UI. Every host step runs through the bridge. hyper_v
+    shows any HostError."""
+    # 1. Validate the host's SSL certificate before asking for credentials
+    with console.status(f"Checking the SSL certificate on {host}:5986", spinner="dots"):
+        cert = bridge.send("check_cert", host=host)
+    skip_cert = False
+    if cert["status"] == "unreachable":
+        console.print(f"[red]Couldn't reach a WinRM HTTPS listener on {host}:5986 to check its certificate.[/]")
+        console.print(Text(cert["detail"], style="grey62"))
+        console.print("Enable WinRM over HTTPS on the host (see docs/hyper-v.md), then try again.")
+        return
+    if cert["status"] == "invalid":
+        console.print(f"[yellow]The SSL certificate on {host} isn't valid[/] (usually because it's self-signed):")
+        console.print(Text(cert["detail"], style="grey62"))
+        console.print("Skipping the checks keeps the connection encrypted, but no longer verifies that you reached the right host.")
+        if not confirm("Skip certificate checks for this connection?", default=False):
+            console.print("[grey62]Not connected. Install a trusted certificate on the host to connect without skipping.[/]")
+            return
+        skip_cert = True
+    else:
+        console.print(f"[green]SSL certificate is valid[/] for {host}")
+
+    # 2. Only now ask for the account. PowerShell asks for the password.
+    hv = state["hyperv"]
+    hv["user"] = text("Administrator account on the host", hv.get("user"))
+    save_state()
+    console.print("[grey62]PowerShell asks for the password next. It stays in a SecureString and never reaches jclab.py.[/]")
+    info = bridge.send("connect", host=host, user=hv["user"], skip_cert=skip_cert)
+    console.print(f"[green]Connected[/] to [bold]{info['computer']}[/] ({info['scheme']}, {info['auth']})")
+
+    with console.status("Reading golden exports on the host", spinner="dots"):
+        lab = bridge.call("Get-LabState", source, destination, name)[0]
+    plan = lab["Plan"]
+    if lab["Skipped"]:
+        print_table("Not part of the lab (skipped)", ("Export", "Reason"),
+                    [(s["Export"], s["Reason"]) for s in lab["Skipped"]], "grey50")
+    print_table("Deployment plan", ("Golden VM", "Deploys as", "Folder"), [(p["Name"], p["NewName"], p["Dir"]) for p in plan])
+
+    plan = pre_deployment_check(bridge, lab)
+    if plan:
+        import_vms(bridge, plan, throttle)
+
+
+def pre_deployment_check(bridge, lab):
+    """Offers Cancel, Redeploy, Deploy missing or Delete if you already have
+    lab VMs or folders. Returns the VMs to import."""
+    existing, folders, missing, plan = lab["Existing"], lab["Folders"], lab["Missing"], lab["Plan"]
+    if not (existing or folders):
+        return plan
+    if existing:
+        print_table("You already have these VMs", ("Name", "State", "Checkpoints", "Path"),
+                    [(vm["Name"], vm["State"], str(vm["Checkpoints"]), vm["Path"]) for vm in existing], "yellow")
+    if folders:
+        print_table("These folders already exist", ("Folder",), [(f,) for f in folders], "yellow")
+
+    choices = [Choice("Cancel: change nothing", "cancel"),
+               Choice("Redeploy: delete these VMs, disks and folders, then import fresh copies", "redeploy")]
+    # Offer "Deploy missing" only when you have some of the lab but not all of it
+    if existing and missing:
+        print_table(f"Missing from your lab ({len(missing)} of {len(plan)})", ("Missing VM",),
+                    [(p["NewName"],) for p in missing], "yellow")
+        choices.append(Choice(f"Deploy missing: keep the VMs you have, import only the {len(missing)} missing", "missing"))
+    choices.append(Choice("Delete: delete these VMs, disks and folders, then stop", "delete"))
+    answer = select("Existing lab found. What do you want to do?", choices)
+
+    if answer == "cancel":
+        console.print("[grey62]Cancelled. Nothing changed.[/]")
+        return []
+    if answer == "missing":
+        # Keep the existing VMs. Clear only the leftover folders, which belong
+        # to missing VMs, so their imports start clean.
+        if folders:
+            bridge.call("Remove-LabFolder", folders)
+        console.print(f"[green]Keeping your existing VMs.[/] Importing {len(missing)} missing.")
+        return missing
+    # Hyper-V's own order: VMs without checkpoints came first from the host
+    with console.status("Deleting existing VMs through Hyper-V", spinner="dots"):
+        for vm in existing:
+            bridge.call("Remove-LabVM", vm["Id"])
+            console.print(f"[red]Deleted[/] {vm['Name']}")
+        bridge.call("Remove-LabFolder", [p["Dir"] for p in plan])
+    console.print("[green]Existing lab removed.[/]")
+    return [] if answer == "delete" else plan
+
+
+FACT_SECONDS = 15
+
+
+def import_vms(bridge, plan, throttle):
+    """Imports up to `throttle` VMs at once in a live table, with a fact box
+    below it, then prints the results"""
+    status = {p["NewName"]: ("Queued", "grey62", 0) for p in plan}
+    facts, fact_index, fact_since = load_facts(), 0, time.monotonic()
+    results = []
+
+    def view():
+        table = make_table("Deploying lab VMs", ("Lab VM", "Progress", "Status"))
+        for p in plan:
+            label, colour, percent = status[p["NewName"]]
+            # A copy has no percentage, so its bar pulses while it runs
+            bar = ProgressBar(total=100, completed=percent, width=30, pulse=label == "Copying VM and disks")
+            table.add_row(p["NewName"], bar, Text(label, style=colour))
+        if not facts:
+            return table
+        elapsed = min(FACT_SECONDS, time.monotonic() - fact_since)
+        timer = Table.grid(padding=(0, 1))
+        timer.add_row(Text("Next fact", style="grey62"), ProgressBar(total=FACT_SECONDS, completed=elapsed, width=20),
+                      Text(f"{int(100 * elapsed / FACT_SECONDS)}%", style="grey62"))
+        return Group(table, fact_panel(facts[fact_index % len(facts)], timer))
+
+    def finish(p, label, colour, message):
+        status[p["NewName"]] = (label, colour, 100)
+        results.append((p["NewName"], Text(message, style=colour)))
+
+    queue, running = list(plan), {}   # running: host job ID -> plan entry
+    with Live(view(), console=console, refresh_per_second=4) as live:
+        while queue or running:
+            # Start imports until the throttle limit is reached
+            while queue and len(running) < throttle:
+                p = queue.pop(0)
+                try:
+                    running[bridge.call("Start-LabImport", p["ConfigPath"], p["Dir"])[0]] = p
+                    status[p["NewName"]] = ("Copying VM and disks", ACCENT, 10)
+                except HostError as error:
+                    finish(p, "Failed", "red", f"Failed: {error}")
+            time.sleep(1)
+            if running:
+                for job in bridge.call("Get-FinishedLabImport", list(running)):
+                    p = running.pop(job)
+                    status[p["NewName"]] = ("Starting", ACCENT, 90)
+                    live.update(view())
+                    try:
+                        bridge.call("Complete-LabImport", job, p["NewName"])
+                        finish(p, "Imported and started", "green", "Imported and started")
+                    except HostError as error:
+                        finish(p, "Failed", "red", f"Failed: {error}")
+            if facts and time.monotonic() - fact_since >= FACT_SECONDS:
+                fact_index, fact_since = fact_index + 1, time.monotonic()
+            live.update(view())
+        facts = []   # the final frame shows the VM table only
+        live.update(view())
+    console.print()
+
+    print_table("Results", ("VM", "Result"), results)
 
 
 # --- UTM ----------------------------------------------------------------------
