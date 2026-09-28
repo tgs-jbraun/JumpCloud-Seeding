@@ -59,6 +59,24 @@ Pick Hyper-V, then "From this workstation". jclab.py draws the whole UI. A Power
 
 While the disks copy, a separate "While you wait" box below the table shows a random two-sentence pop-culture fact, with a bar that fills up until the next fact. The facts come from [`pop-culture-facts.txt`](../hyper-v/pop-culture-facts.txt), one per line as `sentence | sentence | source`. Each names its Wikipedia source. To add a fact, add a line.
 
+## Convert disks for XCP-ng
+
+[`convert-vhdx-to-vhd.ps1`](../Tools/convert-vhdx-to-vhd.ps1) batch converts VHDX disks to the dynamic VHDs XCP-ng imports, following the [XCP-ng migration guide](https://docs.xcp-ng.org/installation/migrate-to-xcp-ng/#from-hyper-v). It runs on the Hyper-V host in an elevated Windows PowerShell 5.1 and leaves the VHDX files unchanged.
+
+1. Remove the Hyper-V integration tools from each guest, then shut the VMs down.
+2. Convert the disks of whole VMs, or of every VHDX in a folder:
+
+   ```powershell
+   .\Tools\convert-vhdx-to-vhd.ps1 -VMName DC01, WIN11-01 -Destination C:\XCP-ng
+   .\Tools\convert-vhdx-to-vhd.ps1 -Path C:\ProgramData\Microsoft\Windows\Hyper-V -Destination C:\XCP-ng
+   ```
+
+3. In Xen Orchestra, open Import > Disk, pick the storage repository and upload each VHD.
+4. Create a VM from a template without disks, attach the imported disk, start the VM and install the guest tools.
+
+The script skips a disk, and says why, if it is larger than 2040 GiB (the VHD limit), has 4096-byte logical sectors (VHD needs 512), is a checkpoint disk (delete the VM's checkpoints first, so Hyper-V merges them), or belongs to a running VM. It won't replace an existing VHD unless you add `-Force`.
+
+To copy the VHDs straight into a file-based storage repository instead of importing them, add `-XcpNaming`. Each VHD is then named `<UUID>.vhd`, the only name XCP-ng accepts there, and `mapping.csv` records which VHDX each UUID came from. Rescan the storage repository after copying.
 ## Set up WinRM over HTTPS on the host
 
 The remote import connects only over HTTPS. Run this once, elevated, on the Hyper-V host:

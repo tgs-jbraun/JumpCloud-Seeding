@@ -24,6 +24,8 @@ manual setup.
 | [`hyper-v/`](hyper-v) | Microsoft Hyper-V | PowerShell | Each technician's copy of the golden VM exports |
 | [`utm-qemu/`](utm-qemu) | UTM on a Mac with Apple silicon | zsh, with a Windows launcher | A macOS VM duplicated from a golden VM |
 
+[`Tools/`](Tools) holds stand-alone utilities: [`convert-vhdx-to-vhd.ps1`](Tools/convert-vhdx-to-vhd.ps1) converts Hyper-V VHDX disks to VHDs that XCP-ng can import.
+
 ## Quick start
 
 `jclab.py` sets up and runs the lab on any of the three hypervisors from one
