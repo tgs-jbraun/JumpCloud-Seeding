@@ -73,7 +73,7 @@ Then run it from Windows:
 |---|---|---|
 | `-ComputerName` | Asks, offering the last value | The Mac's host name or IP address |
 | `-User` | Asks, offering the last value | The account on the Mac |
-| `-RepoPath` | `JumpCloud-Seeding` | The repo clone, relative to the account's home folder or absolute |
+| `-RepoPath` | `JumpCloud-Seeding` | The repo clone: a folder in the account's home folder (`JumpCloud-Seeding` or `~/JumpCloud-Seeding`), or a full path |
 | `-UserName`, `-Golden` | Asked by the Mac script | Passed to the Mac script as `-n` and `-g` |
 
 The launcher remembers the Mac, the account and the repo path in `%APPDATA%\JumpCloud-Seeding\utm-remote.json`. `ssh` asks for the password itself, and the launcher never saves it. It runs `ssh -t` so gum gets a terminal. The Mac script adds `/opt/homebrew/bin` to its search path, because commands run over SSH skip `~/.zprofile`, where Homebrew adds it.

@@ -22,8 +22,8 @@ param(
   [string]$ComputerName,
   # Account on the Mac
   [string]$User,
-  # Where the repo is cloned on the Mac, relative to the account's home folder
-  # or absolute
+  # Where the repo is cloned on the Mac: a path in the account's home folder
+  # (JumpCloud-Seeding or ~/JumpCloud-Seeding) or a full path
   [string]$RepoPath,
   # Passed to the zsh script as -n and -g. It asks for them if omitted.
   [string]$UserName,
@@ -42,14 +42,16 @@ function Read-WithDefault($prompt, $default) {
 }
 if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Mac host name or IP' $recent.ComputerName }
 if (-not $User) { $User = Read-WithDefault 'Account on the Mac' $recent.User }
-if (-not $RepoPath) { $RepoPath = Read-WithDefault 'Repo path on the Mac' $(if ($recent.RepoPath) { $recent.RepoPath } else { 'JumpCloud-Seeding' }) }
+if (-not $RepoPath) { $RepoPath = Read-WithDefault 'Repo folder on the Mac (in its home folder, or a full path)' $(if ($recent.RepoPath) { $recent.RepoPath } else { 'JumpCloud-Seeding' }) }
 if (-not ($ComputerName -and $User -and $RepoPath)) { throw 'Enter the Mac, the account and the repo path.' }
 
 New-Item -ItemType Directory -Force (Split-Path $recentFile) | Out-Null
 @{ ComputerName = $ComputerName; User = $User; RepoPath = $RepoPath } | ConvertTo-Json | Set-Content $recentFile
 
-# Single-quote each value for the Mac's shell. SSH commands start in the
-# account's home folder, so a relative repo path works as is.
+# Single-quote each value for the Mac's shell, which then won't expand ~.
+# SSH commands start in the account's home folder, so drop a leading ~/
+# and the path stays in the home folder.
+$RepoPath = $RepoPath -replace '^~/', ''
 function Quote($s) { "'" + ($s -replace "'", "'\''") + "'" }
 $command = @(Quote "$RepoPath/utm-qemu/deploy-macos-vm.zsh")
 if ($UserName) { $command += '-n', (Quote $UserName) }
@@ -57,7 +59,11 @@ if ($Golden) { $command += '-g', (Quote $Golden) }
 
 # -t gives the script a terminal, which gum needs for its menus and spinners
 ssh -t "$User@$ComputerName" ($command -join ' ')
-if ($LASTEXITCODE -ne 0) {
+# 127 is the shell's "command not found"
+if ($LASTEXITCODE -eq 127) {
+  Write-Warning "The Mac couldn't find $RepoPath/utm-qemu/deploy-macos-vm.zsh. Check the repo folder and run git pull in the clone on the Mac."
+}
+elseif ($LASTEXITCODE -ne 0) {
   Write-Warning "The script on the Mac exited with code $LASTEXITCODE. If it says -1743, click Allow on the Mac's screen, then run this again."
 }
 exit $LASTEXITCODE

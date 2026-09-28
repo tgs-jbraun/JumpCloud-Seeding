@@ -612,7 +612,7 @@ def utm():
         # From Windows, through the SSH launcher
         u["host"] = text("Mac host name or IP", u.get("host"))
         u["user"] = text("Account on the Mac", u.get("user"))
-        u["repo"] = text("Repo path on the Mac (relative to its home folder)", u.get("repo", "JumpCloud-Seeding"))
+        u["repo"] = text("Repo folder on the Mac (in its home folder, or a full path)", u.get("repo", "JumpCloud-Seeding"))
         rows[:0] = [("Runs", f"over SSH on {u['user']}@{u['host']}"), ("Repo on the Mac", u["repo"])]
         command = powershell("utm-qemu/deploy-macos-vm-remote.ps1", "-ComputerName", u["host"], "-User", u["user"],
                              "-RepoPath", u["repo"], "-UserName", name, "-Golden", golden)
