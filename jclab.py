@@ -609,13 +609,13 @@ def utm():
         rows.insert(0, ("Runs", "on this Mac"))
         command = ["zsh", str(REPO / "utm-qemu" / "deploy-macos-vm.zsh"), "-n", name, "-g", golden]
     else:
-        # From Windows, through the SSH launcher
+        # From Windows, through the SSH launcher, which sends the script to the Mac
         u["host"] = text("Mac host name or IP", u.get("host"))
         u["user"] = text("Account on the Mac", u.get("user"))
-        u["repo"] = text("Repo folder on the Mac (in its home folder, or a full path)", u.get("repo", "JumpCloud-Seeding"))
-        rows[:0] = [("Runs", f"over SSH on {u['user']}@{u['host']}"), ("Repo on the Mac", u["repo"])]
+        # The launcher asks which SSH key to sign in with
+        rows.insert(0, ("Runs", f"over SSH on {u['user']}@{u['host']}"))
         command = powershell("utm-qemu/deploy-macos-vm-remote.ps1", "-ComputerName", u["host"], "-User", u["user"],
-                             "-RepoPath", u["repo"], "-UserName", name, "-Golden", golden)
+                             "-UserName", name, "-Golden", golden)
         console.print("[grey62]On the first remote run, click Allow on the Mac's screen when macOS asks "
                       "whether SSH may control UTM.[/]")
     settings_table("UTM deployment", rows)

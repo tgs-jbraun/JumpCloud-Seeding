@@ -15,7 +15,7 @@ UTM 5.0.6, a prerelease, adds scripted macOS installs from an IPSW. The script d
 - Apple silicon. macOS guests don't run on Intel Macs.
 - UTM in `/Applications`, from [mac.getutm.app](https://mac.getutm.app).
 - [gum](https://github.com/charmbracelet/gum) (MIT license, Charmbracelet) for the menus, spinners and boxes: `brew install gum`.
-- A clone of this repo.
+- A clone of this repo, only to run the script on the Mac itself.
 - Permission for your terminal to control UTM. macOS asks on the first run.
 
 ## Build the golden VM
@@ -55,13 +55,14 @@ The copy shares the golden VM's Mac machine identifier. Don't sign it in to the 
 
 ## Run it from Windows over SSH
 
-[`deploy-macos-vm-remote.ps1`](../utm-qemu/deploy-macos-vm-remote.ps1) runs the script on the Mac over SSH. The menus appear in your Windows terminal, and the VM's window opens on the Mac's screen. It needs only the SSH client built into Windows 10/11 and Windows Server 2019 or later, and it works in Windows PowerShell 5.1.
+[`deploy-macos-vm-remote.ps1`](../utm-qemu/deploy-macos-vm-remote.ps1) runs the script on the Mac over SSH, and the Mac needs no copy of this repo. The launcher sends the script, and the pop-culture facts it shows, inside the SSH command. The Mac writes them to a temporary folder, runs the script, and deletes the folder whether the script succeeds or not. The menus appear in your Windows terminal, and the VM's window opens on the Mac's screen. It needs only the SSH client built into Windows 10/11 and Windows Server 2019 or later, and it works in Windows PowerShell 5.1.
 
 Set up the Mac once:
 
 1. Turn on automatic login. UTM is a desktop app, so it needs a logged-in user to run VMs.
 2. Turn on Remote Login in System Settings > General > Sharing.
-3. Start the first remote run, then click Allow on the Mac's screen when macOS asks whether SSH may control UTM. The prompt doesn't appear over SSH. Until you allow it, the script fails with "Not authorized to send Apple events" (-1743). The setting is under System Settings > Privacy & Security > Automation.
+3. Click the info button next to Remote Login, then turn on "Allow full disk access for remote users". The script needs full disk access over SSH.
+4. Start the first remote run, then click Allow on the Mac's screen when macOS asks whether SSH may control UTM. The prompt doesn't appear over SSH. Until you allow it, the script fails with "Not authorized to send Apple events" (-1743). The setting is under System Settings > Privacy & Security > Automation.
 
 Then run it from Windows:
 
@@ -73,10 +74,17 @@ Then run it from Windows:
 |---|---|---|
 | `-ComputerName` | Asks, offering the last value | The Mac's host name or IP address |
 | `-User` | Asks, offering the last value | The account on the Mac |
-| `-RepoPath` | `JumpCloud-Seeding` | The repo clone: a folder in the account's home folder (`JumpCloud-Seeding` or `~/JumpCloud-Seeding`), or a full path |
+| `-IdentityFile` | Asks, offering the last key | The private SSH key to sign in with |
+| `-PasswordOnly` | Off | Sign in with the Mac password instead of a key |
 | `-UserName`, `-Golden` | Asked by the Mac script | Passed to the Mac script as `-n` and `-g` |
 
-The launcher remembers the Mac, the account and the repo path in `%APPDATA%\JumpCloud-Seeding\utm-remote.json`. `ssh` asks for the password itself, and the launcher never saves it. It runs `ssh -t` so gum gets a terminal. The Mac script adds `/opt/homebrew/bin` to its search path, because commands run over SSH skip `~/.zprofile`, where Homebrew adds it.
+The launcher signs in with an SSH key from `%USERPROFILE%\.ssh`:
+
+1. It lists the key pairs there, plus a "Password only" option, and offers the key you picked last time.
+2. It checks whether the Mac already accepts the key, with a quick login that can't prompt.
+3. If the Mac doesn't accept it yet, the launcher offers to add the public key to `~/.ssh/authorized_keys` on the Mac. You enter the Mac password that one time. The launcher doesn't add a key the file already has.
+
+The launcher remembers the Mac, the account and the key in `%APPDATA%\JumpCloud-Seeding\utm-remote.json`. `ssh` asks for any password or key passphrase itself, and the launcher never saves one. It runs `ssh -t` so gum gets a terminal. The Mac script adds `/opt/homebrew/bin` to its search path, because commands run over SSH skip `~/.zprofile`, where Homebrew adds it.
 
 Remote Apple Events (Remote Application Scripting) aren't an alternative from Windows. Only another Mac can send them.
 

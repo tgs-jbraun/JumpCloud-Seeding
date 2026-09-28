@@ -42,7 +42,7 @@ From the workstation, jclab.py checks the certificate, asks for the account, and
 ## UTM
 
 1. Enter your name and the golden VM's name.
-2. From Windows, also enter the Mac, the account on it and the repo path on it.
+2. From Windows, also enter the Mac and the account on it. The SSH launcher then asks which key from `~/.ssh` to sign in with. The Mac needs no copy of this repo.
 3. Review and confirm.
 
 On a Mac, jclab.py runs the zsh script. From Windows it runs the SSH launcher, so the Mac setup on the [UTM on macOS](utm-macos.md) page applies, including the one-time Allow click on the Mac.
