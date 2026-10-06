@@ -18,7 +18,7 @@
 $ErrorActionPreference = 'Stop'
 
 # The host functions jclab.py may call, from JCLab.Host.ps1
-$allowed = 'Get-LabState', 'Remove-LabVM', 'Remove-LabFolder', 'Start-LabImport', 'Get-FinishedLabImport', 'Complete-LabImport'
+$allowed = 'Get-LabState', 'Remove-LabVM', 'Remove-LabFolder', 'New-LabSwitch', 'Remove-LabSwitch', 'Start-LabImport', 'Get-FinishedLabImport', 'Complete-LabImport'
 $session = $null
 
 function Test-Certificate($ComputerName) {

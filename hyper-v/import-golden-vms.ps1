@@ -8,15 +8,22 @@
 # delete them, deploy only the missing ones, or cancel before it changes
 # anything.
 #
+# Each technician's lab gets a Private vSwitch, <your name>_JCLab_vSwitch.
+# Before first boot, every adapter a golden VM had on the golden lab switch
+# (-LabSwitch) moves there, so different technicians' VMs never share L2.
+# Adapters on other switches stay put. Delete removes the Private switch.
+#
 # Run it on the Hyper-V host in an elevated PowerShell, with JCLab.Host.ps1
 # next to it. To run from your workstation, use jclab.py in the repo root.
 # It prompts for your name unless you pass -UserName.
 #
 #   .\import-golden-vms.ps1
-#   .\import-golden-vms.ps1 -UserName jdoe -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
+#   .\import-golden-vms.ps1 -UserName jdoe -LabSwitch JCLab-Golden -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
 #   .\import-golden-vms.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
 param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
+  # The vSwitch the golden VMs' lab adapters use
+  [string]$LabSwitch = (Read-Host "The golden VMs' lab vSwitch"),
   [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
   [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
   # VMs imported at once. Lower it on spinning disks.
@@ -30,7 +37,7 @@ $UserName = $UserName.Trim() -replace '\s+', '-'
 if (-not $UserName) { throw 'No name given. Enter a name or pass -UserName.' }
 if ($UserName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Name '$UserName' contains characters not allowed in folder names" }
 
-$state = Get-LabState $Source $Destination $UserName
+$state = Get-LabState $Source $Destination $UserName $LabSwitch
 $state.Skipped | ForEach-Object { Write-Host "Skipping $($_.Export): $($_.Reason)" }
 $plan = $state.Plan
 
@@ -77,11 +84,17 @@ elseif ($answer) {
   # Every VM using these folders is gone now, so nothing holds their files
   Remove-LabFolder $plan.Dir
   Write-Progress -Activity 'Deleting existing VMs' -Completed
-  if ($answer -eq 'Delete') { return }
+  if ($answer -eq 'Delete') {
+    Remove-LabSwitch $UserName
+    Write-Host "Deleted the lab network $(Get-LabSwitchName $UserName)"
+    return
+  }
 }
 
-# Import up to $ThrottleLimit VMs at once. When an import finishes, the VM is
-# renamed and started.
+New-LabSwitch $UserName
+
+# Import up to $ThrottleLimit VMs at once. When an import finishes, the VM's lab
+# adapters move to the Private switch, then it is renamed and started.
 $queue = [System.Collections.Queue]::new(@($plan))
 $running = @{}   # import job ID -> plan entry
 $done = 0
@@ -104,8 +117,8 @@ while ($queue.Count -or $running.Count) {
     $running.Remove($id)
     $done++
     try {
-      Complete-LabImport $id $p.NewName
-      Write-Host "Imported $($p.Name) and started it as $($p.NewName)"
+      Complete-LabImport $id $p.NewName $UserName $LabSwitch
+      Write-Host "Imported $($p.Name) and started it as $($p.NewName) on $(Get-LabSwitchName $UserName)"
     }
     catch { Write-Warning "Failed $($p.Name): $_" }
   }

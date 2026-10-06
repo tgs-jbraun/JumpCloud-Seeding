@@ -15,7 +15,18 @@ function Test-InFolder($Path, $Dir) {
 # files live in a planned destination folder: an interrupted run can leave a
 # VM there under its golden name, and Hyper-V keeps its files locked until
 # the VM itself is deleted.
-function Get-LabState($Source, $Destination, $UserName) {
+# Each technician's lab gets its own Private vSwitch. A Private switch
+# connects only the VMs on it: not the host, and not other technicians' labs,
+# so VMs of different technicians never share L2.
+function Get-LabSwitchName($UserName) { "${UserName}_JCLab_vSwitch" }
+
+function Get-LabState($Source, $Destination, $UserName, $LabSwitch) {
+  # Lab adapters are found by the golden VMs' lab switch. With a wrong name
+  # none would move, and the labs would stay on one network. So stop here,
+  # before the pre-check deletes or imports anything.
+  if (-not (Get-VMSwitch -Name $LabSwitch -ErrorAction SilentlyContinue)) {
+    throw "No vSwitch named '$LabSwitch' on this host. Give the name of the switch the golden VMs' lab adapters use."
+  }
   # An export keeps the VM config at <VM>\Virtual Machines\<GUID>.vmcx.
   # Checkpoint configs live elsewhere and come along with the import.
   $configs = Get-ChildItem $Source -Recurse -Filter *.vmcx | Where-Object { $_.Directory.Name -eq 'Virtual Machines' }
@@ -87,6 +98,22 @@ function Remove-LabFolder($Dirs) {
   $Dirs | Where-Object { Test-Path $_ } | Remove-Item -Recurse -Force
 }
 
+# Creates the technician's Private vSwitch if it doesn't exist yet
+function New-LabSwitch($UserName) {
+  $name = Get-LabSwitchName $UserName
+  if (-not (Get-VMSwitch -Name $name -ErrorAction SilentlyContinue)) {
+    New-VMSwitch -Name $name -SwitchType Private -Notes "JumpCloud lab network of $UserName" | Out-Null
+  }
+}
+
+# Removes the technician's Private vSwitch once no VM uses it
+function Remove-LabSwitch($UserName) {
+  $name = Get-LabSwitchName $UserName
+  if ((Get-VMSwitch -Name $name -ErrorAction SilentlyContinue) -and -not (Get-VMNetworkAdapter -All | Where-Object SwitchName -eq $name)) {
+    Remove-VMSwitch -Name $name -Force
+  }
+}
+
 # Starts a copy import as a native Hyper-V job and returns the job ID. The
 # Copy parameter set copies the VM (never registers it in place) and writes
 # every file under $Dir. Incompatibilities, usually a virtual switch that
@@ -101,12 +128,17 @@ function Get-FinishedLabImport($JobIds) {
   Get-Job -Id $JobIds | Where-Object { $_.State -in 'Completed', 'Failed', 'Stopped' } | ForEach-Object Id
 }
 
-# Collects a finished import, then renames and starts the VM. Throws the
-# import's error if it failed.
-function Complete-LabImport($JobId, $NewName) {
+# Collects a finished import, moves its lab adapters to the technician's
+# Private vSwitch, then renames and starts the VM. Throws the import's error
+# if it failed. Adapters on other switches, such as a router's WAN on an
+# external switch, stay where they are.
+function Complete-LabImport($JobId, $NewName, $UserName, $LabSwitch) {
   $job = Get-Job -Id $JobId
   try { $vm = Receive-Job $job } finally { Remove-Job $job }
   if (-not $vm) { throw 'Import-VM returned no VM' }
+  # Before first boot, so the VM never joins the shared lab switch
+  Get-VMNetworkAdapter -VM $vm | Where-Object SwitchName -eq $LabSwitch |
+    Connect-VMNetworkAdapter -SwitchName (Get-LabSwitchName $UserName)
   Rename-VM -VM $vm -NewName $NewName
   Start-VM -VM $vm
 }

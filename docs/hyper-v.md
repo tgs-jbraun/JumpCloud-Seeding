@@ -23,6 +23,7 @@ Both run their host-side steps from [`JCLab.Host.ps1`](../hyper-v/JCLab.Host.ps1
 | Source (`-Source`) | `C:\Users\Public\Documents\Hyper-V\Golden` | Folder of golden exports on the host |
 | Destination (`-Destination`) | `C:\ProgramData\Microsoft\Windows\Hyper-V` | Folder for the lab VMs on the host |
 | At once (`-ThrottleLimit`) | `3` | VMs imported at once, 1 to 16 |
+| Lab switch (`-LabSwitch`) | Asks | The vSwitch the golden VMs' lab adapters use |
 
 The host script takes these as parameters. jclab.py asks for them, and also for the host and its administrator account.
 
@@ -40,6 +41,8 @@ Both tools follow the same steps:
 4. Rename each VM to `<name>_JCLab_<vm>` and starts it.
 
 **Deleting uses Hyper-V's own order.** For each VM, the tool discards a saved state, turns the VM off, deletes its checkpoints and waits for the disk merge, removes the VM, then deletes its disks. It waits up to 5 minutes for each step. VMs with checkpoints go last, because their merges take longest. Folders go after all the VMs, once nothing holds their files.
+
+**Each lab gets its own network.** Before the first import, the tools create a Private vSwitch for the technician, `<name>_JCLab_vSwitch`. A Private switch connects only the VMs on it, not the host and not other technicians' labs, so VMs of different technicians never share L2. Before each VM's first boot, its adapters on the lab switch move to that Private switch. Adapters on other switches, such as a router's WAN on an external switch, stay as they are. If the lab switch name is wrong, the tools stop before changing anything, because no adapters would move. Delete also removes the Private switch. Labs deployed before this change still use the shared lab switch, so redeploy them.
 
 **Imports run in parallel.** Each import is a Hyper-V background job, 3 at a time by default. That is faster between SSD or NVMe drives. On spinning disks parallel copies compete for the same disks, so import 1 or 2 at once.
 

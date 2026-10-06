@@ -375,13 +375,16 @@ def hyper_v():
     source = text("Golden exports on the host", hv.get("source", r"C:\Users\Public\Documents\Hyper-V\Golden"))
     destination = text("Lab VM folder on the host", hv.get("destination", r"C:\ProgramData\Microsoft\Windows\Hyper-V"))
     throttle = text("VMs imported at once (lower it on spinning disks)", hv.get("throttle", 3), whole_number(1, 16))
-    rows += [("Source", source), ("Destination", destination), ("At once", throttle)]
+    # Its adapters on this switch move to the technician's Private switch, so labs never share L2
+    lab_switch = text("The golden VMs' lab vSwitch", hv.get("lab_switch"))
+    rows += [("Source", source), ("Destination", destination), ("At once", throttle),
+             ("Lab network", f"{lab_switch} -> {name}_JCLab_vSwitch (Private)")]
 
     settings_table("Hyper-V import", rows)
     if not confirm("Start the import?"):
         return
-    hv.update(mode=mode, source=source, destination=destination, throttle=int(throttle))
-    args = ["-UserName", name, "-Source", source, "-Destination", destination, "-ThrottleLimit", throttle]
+    hv.update(mode=mode, source=source, destination=destination, throttle=int(throttle), lab_switch=lab_switch)
+    args = ["-UserName", name, "-LabSwitch", lab_switch, "-Source", source, "-Destination", destination, "-ThrottleLimit", throttle]
 
     if mode == "local":
         save_state()
@@ -390,7 +393,7 @@ def hyper_v():
     save_state()
     try:
         with Bridge() as bridge:
-            hyper_v_remote(bridge, host, name, source, destination, int(throttle))
+            hyper_v_remote(bridge, host, name, source, destination, int(throttle), lab_switch)
     except HostError as error:
         console.print(Panel(Text(str(error)), title="PowerShell reported an error", title_align="left",
                             border_style="red", box=box.ROUNDED))
@@ -448,7 +451,7 @@ class Bridge:
         self.process.wait(timeout=30)
 
 
-def hyper_v_remote(bridge, host, name, source, destination, throttle):
+def hyper_v_remote(bridge, host, name, source, destination, throttle, lab_switch):
     """The remote import UI. Every host step runs through the bridge. hyper_v
     shows any HostError."""
     # 1. Validate the host's SSL certificate before asking for credentials
@@ -480,19 +483,20 @@ def hyper_v_remote(bridge, host, name, source, destination, throttle):
     console.print(f"[green]Connected[/] to [bold]{info['computer']}[/] ({info['scheme']}, {info['auth']})")
 
     with console.status("Reading golden exports on the host", spinner="dots"):
-        lab = bridge.call("Get-LabState", source, destination, name)[0]
+        lab = bridge.call("Get-LabState", source, destination, name, lab_switch)[0]
     plan = lab["Plan"]
     if lab["Skipped"]:
         print_table("Not part of the lab (skipped)", ("Export", "Reason"),
                     [(s["Export"], s["Reason"]) for s in lab["Skipped"]], "grey50")
     print_table("Deployment plan", ("Golden VM", "Deploys as", "Folder"), [(p["Name"], p["NewName"], p["Dir"]) for p in plan])
 
-    plan = pre_deployment_check(bridge, lab)
+    plan = pre_deployment_check(bridge, lab, name)
     if plan:
-        import_vms(bridge, plan, throttle)
+        bridge.call("New-LabSwitch", name)
+        import_vms(bridge, plan, throttle, name, lab_switch)
 
 
-def pre_deployment_check(bridge, lab):
+def pre_deployment_check(bridge, lab, name):
     """Offers Cancel, Redeploy, Deploy missing or Delete if you already have
     lab VMs or folders. Returns the VMs to import."""
     existing, folders, missing, plan = lab["Existing"], lab["Folders"], lab["Missing"], lab["Plan"]
@@ -531,13 +535,17 @@ def pre_deployment_check(bridge, lab):
             console.print(f"[red]Deleted[/] {vm['Name']}")
         bridge.call("Remove-LabFolder", [p["Dir"] for p in plan])
     console.print("[green]Existing lab removed.[/]")
-    return [] if answer == "delete" else plan
+    if answer == "delete":
+        bridge.call("Remove-LabSwitch", name)
+        console.print(f"[red]Deleted[/] the lab network {name}_JCLab_vSwitch")
+        return []
+    return plan
 
 
 FACT_SECONDS = 15
 
 
-def import_vms(bridge, plan, throttle):
+def import_vms(bridge, plan, throttle, name, lab_switch):
     """Imports up to `throttle` VMs at once in a live table, with a fact box
     below it, then prints the results"""
     status = {p["NewName"]: ("Queued", "grey62", 0) for p in plan}
@@ -581,7 +589,7 @@ def import_vms(bridge, plan, throttle):
                     status[p["NewName"]] = ("Starting", ACCENT, 90)
                     live.update(view())
                     try:
-                        bridge.call("Complete-LabImport", job, p["NewName"])
+                        bridge.call("Complete-LabImport", job, p["NewName"], name, lab_switch)
                         finish(p, "Imported and started", "green", "Imported and started")
                     except HostError as error:
                         finish(p, "Failed", "red", f"Failed: {error}")
