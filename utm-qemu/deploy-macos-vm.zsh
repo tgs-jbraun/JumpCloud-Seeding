@@ -13,7 +13,7 @@
 #   1. In UTM, create a macOS VM (Virtualize > macOS 12+) from an IPSW.
 #      Set its disk to 40 GB. UTM can't resize it later from a script.
 #   2. Finish Setup Assistant and install what every lab VM needs.
-#   3. Shut it down and name it JCLab-macOS-Golden, or pass its name with -g.
+#   3. Shut it down, and set its name as GoldenVM in settings.json or pass -g.
 #
 # Disk space: UTM duplicates with APFS clones, so the copy takes almost no
 # space at first. It grows only by what it writes after that. The disk image is
@@ -40,7 +40,8 @@
 #   ./deploy-macos-vm.zsh -n jdoe -g "macOS Golden"
 #
 #   -n  Your name, added to the VM name (asks if omitted)
-#   -g  Name of the golden VM in UTM (asks if omitted, default JCLab-macOS-Golden)
+#   -g  Name of the golden VM in UTM (asks if omitted, offering the last one or
+#       GoldenVM from settings.json next to this script; copy settings.example.json)
 
 emulate -L zsh
 setopt err_exit no_unset pipe_fail extended_glob
@@ -134,7 +135,9 @@ gum style --bold --foreground 39 --border double --border-foreground 39 \
   --align center --width 44 --padding '1 2' 'JumpCloud Lab' 'UTM macOS deploy'
 
 last_tech=$(defaults read $prefs TechName 2>/dev/null) || last_tech=''
-last_golden=$(defaults read $prefs GoldenVM 2>/dev/null) || last_golden=JCLab-macOS-Golden
+# The last golden VM, else settings.json (plutil reads JSON on macOS)
+last_golden=$(defaults read $prefs GoldenVM 2>/dev/null) ||
+  last_golden=$(plutil -extract GoldenVM raw -o - "${0:A:h}/settings.json" 2>/dev/null) || last_golden=''
 
 [[ -n $tech ]] || tech=$(gum input --header 'Your name (added to the VM name)' --value "$last_tech")
 [[ -n $golden ]] || golden=$(gum input --header 'Golden VM in UTM' --value "$last_golden")

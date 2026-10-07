@@ -91,6 +91,19 @@ except (OSError, ValueError):
     state = {}
 
 
+def site_settings(folder):
+    """Site values (hosts, accounts, paths, names) from <folder>/settings.json.
+    Git ignores it. Copy <folder>/settings.example.json to make one."""
+    try:
+        return json.loads((REPO / folder / "settings.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+
+
+def required(value):
+    return bool(value.strip()) or "Enter a value, or set it in settings.json."
+
+
 def save_state():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -364,19 +377,20 @@ def hyper_v():
     if IS_WINDOWS:
         modes.append(Choice("On this Hyper-V host (Windows PowerShell 5.1)", "local"))
     hv = state.setdefault("hyperv", {})
+    site = site_settings("hyper-v")
     mode = modes[0].value if len(modes) == 1 else select(
         "Where does the import run?", modes, next((c for c in modes if c.value == hv.get("mode")), None))
 
     name = ask_technician()
     rows = [("Runs", "remotely" if mode == "remote" else "on this host"), ("Technician", name)]
     if mode == "remote":
-        host = text("Hyper-V host name or IP", hv.get("host"))
+        host = text("Hyper-V host name or IP", hv.get("host") or site.get("ComputerName"), required)
         rows.append(("Host", host))
-    source = text("Golden exports on the host", hv.get("source", r"C:\Users\Public\Documents\Hyper-V\Golden"))
-    destination = text("Lab VM folder on the host", hv.get("destination", r"C:\ProgramData\Microsoft\Windows\Hyper-V"))
+    source = text("Golden exports on the host", hv.get("source") or site.get("Source"), required)
+    destination = text("Lab VM folder on the host", hv.get("destination") or site.get("Destination"), required)
     throttle = text("VMs imported at once (lower it on spinning disks)", hv.get("throttle", 3), whole_number(1, 16))
     # Its adapters on this switch move to the technician's Private switch, so labs never share L2
-    lab_switch = text("The golden VMs' lab vSwitch", hv.get("lab_switch"))
+    lab_switch = text("The golden VMs' lab vSwitch", hv.get("lab_switch") or site.get("LabSwitch"), required)
     rows += [("Source", source), ("Destination", destination), ("At once", throttle),
              ("Lab network", f"{lab_switch} -> {name}_JCLab_vSwitch (Private)")]
 
@@ -476,7 +490,7 @@ def hyper_v_remote(bridge, host, name, source, destination, throttle, lab_switch
 
     # 2. Only now ask for the account. PowerShell asks for the password.
     hv = state["hyperv"]
-    hv["user"] = text("Administrator account on the host", hv.get("user"))
+    hv["user"] = text("Administrator account on the host", hv.get("user") or site_settings("hyper-v").get("AdminUser"), required)
     save_state()
     console.print("[grey62]PowerShell asks for the password next. It stays in a SecureString and never reaches jclab.py.[/]")
     info = bridge.send("connect", host=host, user=hv["user"], skip_cert=skip_cert)
@@ -607,8 +621,9 @@ def import_vms(bridge, plan, throttle, name, lab_switch):
 
 def utm():
     u = state.setdefault("utm", {})
+    site = site_settings("utm-qemu")
     name = ask_technician()
-    golden = text("Golden VM in UTM", u.get("golden", "JCLab-macOS-Golden"))
+    golden = text("Golden VM in UTM", u.get("golden") or site.get("GoldenVM"), required)
     u["golden"] = golden
     rows = [("Technician", name), ("Golden VM", golden), ("Deploys as", f"{name}_JCLab_macOS"),
             ("CPU / RAM", "4 cores, 4096 MiB")]
@@ -618,8 +633,8 @@ def utm():
         command = ["zsh", str(REPO / "utm-qemu" / "deploy-macos-vm.zsh"), "-n", name, "-g", golden]
     else:
         # From Windows, through the SSH launcher, which sends the script to the Mac
-        u["host"] = text("Mac host name or IP", u.get("host"))
-        u["user"] = text("Account on the Mac", u.get("user"))
+        u["host"] = text("Mac host name or IP", u.get("host") or site.get("ComputerName"), required)
+        u["user"] = text("Account on the Mac", u.get("user") or site.get("User"), required)
         # The launcher asks which SSH key to sign in with
         rows.insert(0, ("Runs", f"over SSH on {u['user']}@{u['host']}"))
         command = powershell("utm-qemu/deploy-macos-vm-remote.ps1", "-ComputerName", u["host"], "-User", u["user"],

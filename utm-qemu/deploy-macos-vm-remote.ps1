@@ -46,6 +46,10 @@ $ErrorActionPreference = 'Stop'
 
 $recentFile = Join-Path $env:APPDATA 'JumpCloud-Seeding\utm-remote.json'
 $recent = try { Get-Content $recentFile -Raw | ConvertFrom-Json } catch { $null }
+# Site values: the Mac, its account and the golden VM, from settings.json next
+# to this script (copy settings.example.json). The last run's answers win.
+$settings = try { Get-Content (Join-Path $PSScriptRoot 'settings.json') -Raw | ConvertFrom-Json } catch { $null }
+if (-not $Golden) { $Golden = $settings.GoldenVM }
 
 # Press Enter to keep the value in brackets
 function Read-WithDefault($prompt, $default) {
@@ -53,8 +57,8 @@ function Read-WithDefault($prompt, $default) {
   $answer = Read-Host $prompt
   if ($answer) { $answer } else { $default }
 }
-if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Mac host name or IP' $recent.ComputerName }
-if (-not $User) { $User = Read-WithDefault 'Account on the Mac' $recent.User }
+if (-not $ComputerName) { $ComputerName = Read-WithDefault 'Mac host name or IP' $(if ($recent.ComputerName) { $recent.ComputerName } else { $settings.ComputerName }) }
+if (-not $User) { $User = Read-WithDefault 'Account on the Mac' $(if ($recent.User) { $recent.User } else { $settings.User }) }
 if (-not ($ComputerName -and $User)) { throw 'Enter the Mac and the account.' }
 $target = "$User@$ComputerName"
 

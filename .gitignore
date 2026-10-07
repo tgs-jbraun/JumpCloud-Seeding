@@ -16,3 +16,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 __pycache__/
+# Site values (hosts, accounts, paths). The settings.example.json files are tracked.
+hyper-v/settings.json
+utm-qemu/settings.json

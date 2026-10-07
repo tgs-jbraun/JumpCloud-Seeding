@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy to settings.json and fill in your site's values. Git ignores settings.json. Never put a password here: the scripts ask for it.",
+  "Source": "C:\\Users\\Public\\Documents\\Hyper-V\\Golden",
+  "Destination": "C:\\ProgramData\\Microsoft\\Windows\\Hyper-V",
+  "LabSwitch": "JCLab-Golden",
+  "ComputerName": "hyperv01.example.local",
+  "AdminUser": "EXAMPLE\\Administrator"
+}

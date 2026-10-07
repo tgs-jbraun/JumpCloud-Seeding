@@ -43,10 +43,58 @@ variable "vm_ssh_public_key" {
 
 variable "windows_vm_count" {
   type        = number
-  description = "Number of Windows 11 JumpCloud test VMs (JUMPCLOUD-TEST-1, -2, ...)"
+  description = "Number of Windows 11 JumpCloud test VMs (<windows_vm_prefix>1, 2, ...)"
 
   validation {
     condition     = var.windows_vm_count >= 0 && floor(var.windows_vm_count) == var.windows_vm_count
     error_message = "windows_vm_count must be a whole number of 0 or more."
   }
+}
+
+# Names of things that already exist in XO, and the lab's addressing. Set
+# them in terraform.tfvars, so no site's names live in the code.
+
+variable "pool_name" {
+  type        = string
+  description = "XO pool to deploy into"
+}
+
+variable "sr_name" {
+  type        = string
+  description = "Storage repository for the VM disks"
+}
+
+variable "wan_network_name" {
+  type        = string
+  description = "Network for pfSense's WAN interface"
+}
+
+variable "lab_network_name" {
+  type        = string
+  description = "SDN private network the lab VMs share, created in XO by the SDN Controller"
+}
+
+variable "lab_net_cidr" {
+  type        = string
+  description = "Lab network subnet. pfSense serves DHCP on it."
+}
+
+variable "ubuntu_template" {
+  type        = string
+  description = "XO template for the Ubuntu Server 24.04 cloud-init VMs"
+}
+
+variable "pfsense_template" {
+  type        = string
+  description = "XO template for the pfSense VM"
+}
+
+variable "windows_template" {
+  type        = string
+  description = "XO template for the Windows 11 VMs (keep it free of a vTPM)"
+}
+
+variable "windows_vm_prefix" {
+  type        = string
+  description = "Name prefix for the Windows VMs, which get 1, 2, ... appended"
 }

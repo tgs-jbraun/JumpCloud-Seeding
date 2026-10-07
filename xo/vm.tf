@@ -14,8 +14,8 @@
 locals {
   gib = 1024 * 1024 * 1024
 
-  # jumpcloud-lab-net subnet. pfSense (192.168.1.1) serves DHCP on it.
-  lab_net_cidr = "192.168.1.0/24"
+  # Lab network subnet. pfSense (its first address) serves DHCP on it.
+  lab_net_cidr = var.lab_net_cidr
 
   # e.g. ubuntu-2404-01 => { lab_mac = "02:63:00:00:00:0b" }, -02 gets :0c, ...
   # A fixed, locally administered MAC lets the netplan config below match the

@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy to settings.json and fill in your site's values. Git ignores settings.json. Never put a password here: ssh asks for it.",
+  "GoldenVM": "JCLab-macOS-Golden",
+  "ComputerName": "mac-mini.example.local",
+  "User": "labadmin"
+}

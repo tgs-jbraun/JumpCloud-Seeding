@@ -2,8 +2,8 @@
 
 # pfSense doesn't use cloud-init. Assign interfaces and IPs from the VM
 # console on first boot. Interfaces enumerate in the order below:
-#   xn0 = LAN   (pfSense WAN)
-#   xn1 = jumpcloud-lab-net (pfSense LAN)
+#   xn0 = wan_network_name   (pfSense WAN)
+#   xn1 = lab_network_name   (pfSense LAN)
 #
 # MANUAL STEP after the first apply: disable TX checksum offload on both
 # interfaces. The provider has no setting for it.
@@ -20,7 +20,7 @@ resource "xenorchestra_vm" "pfsense" {
   cpus       = 2
   memory_max = 2 * local.gib
 
-  # NIC 0: WAN
+  # NIC 0: WAN network
   network {
     network_id = data.xenorchestra_network.wan.id
   }

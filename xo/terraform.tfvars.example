@@ -13,5 +13,17 @@ vm_name              = "ubuntu-2404"                 # prefix: VMs become ubuntu
 vm_count             = 3
 vm_ssh_public_key    = ""                          # e.g. "ssh-ed25519 AAAA... you@host"
 
-# Windows 11 JumpCloud VMs (JUMPCLOUD-TEST-1, -2, ...)
+# Windows 11 JumpCloud VMs (<windows_vm_prefix>1, 2, ...)
 windows_vm_count     = 3
+windows_vm_prefix    = "JUMPCLOUD-TEST-"
+
+# What already exists in XO
+pool_name        = "my-xcp-pool"
+sr_name          = "my-storage-repository"
+wan_network_name = "LAN"                   # pfSense WAN
+lab_network_name = "jumpcloud-lab-net"     # SDN private network
+lab_net_cidr     = "192.168.1.0/24"        # pfSense serves DHCP here, from .1
+
+ubuntu_template  = "Ubuntu 24.04 Cloud-Init (Hub)"
+pfsense_template = "pfSense 2.6 (Hub)"
+windows_template = "Windows 11 JumpCloud - Template"

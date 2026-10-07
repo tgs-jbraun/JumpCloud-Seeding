@@ -24,9 +24,11 @@ UTM 5.0.6, a prerelease, adds scripted macOS installs from an IPSW. The script d
 2. Set its disk to 40 GB. The script can't resize it later.
 3. Give it a single network adapter. Only the first adapter carries over to the copy.
 4. Finish Setup Assistant and install what every lab VM needs.
-5. Shut it down and name it `JCLab-macOS-Golden`.
+5. Shut it down, and put its name in `GoldenVM` in `utm-qemu/settings.json`.
 
 ## Run it
+
+Put your site's values in `utm-qemu/settings.json`: copy [`settings.example.json`](../utm-qemu/settings.example.json) and fill it in. Git ignores `settings.json`, and it never holds a password. `GoldenVM` is the golden VM's name in UTM. `ComputerName` and `User` are the Mac and its account, used by the Windows launcher and jclab.py.
 
 ```bash
 ./utm-qemu/deploy-macos-vm.zsh
@@ -35,7 +37,7 @@ UTM 5.0.6, a prerelease, adds scripted macOS installs from an IPSW. The script d
 | Option | Default | Meaning |
 |---|---|---|
 | `-n` | Asks, offering the last value | Your name, added to the VM name |
-| `-g` | Asks, offering the last value or `JCLab-macOS-Golden` | The golden VM's name in UTM |
+| `-g` | Asks, offering the last value or `GoldenVM` from `settings.json` | The golden VM's name in UTM |
 
 1. It asks for your name and the golden VM. It remembers both with macOS's `defaults` command, in `~/Library/Preferences/JumpCloud-Seeding.plist`.
 2. It checks that the golden VM exists and is shut down, since UTM only duplicates stopped VMs.

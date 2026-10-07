@@ -11,9 +11,9 @@
 # and these VMs start right after creation, so keep the template itself free
 # of a vTPM (XO > template > Advanced tab).
 resource "xenorchestra_vm" "windows" {
-  # JUMPCLOUD-TEST-1, -2, ... Keyed by name, so changing windows_vm_count
+  # <windows_vm_prefix>1, 2, ... Keyed by name, so changing windows_vm_count
   # only adds or removes VMs at the end
-  for_each = toset([for i in range(var.windows_vm_count) : "JUMPCLOUD-TEST-${i + 1}"])
+  for_each = toset([for i in range(var.windows_vm_count) : "${var.windows_vm_prefix}${i + 1}"])
 
   name_label       = each.key
   name_description = "Windows 11 JumpCloud test VM - managed by Terraform"

@@ -15,7 +15,8 @@
 #
 # Run it on the Hyper-V host in an elevated PowerShell, with JCLab.Host.ps1
 # next to it. To run from your workstation, use jclab.py in the repo root.
-# It prompts for your name unless you pass -UserName.
+# It prompts for your name unless you pass -UserName. -Source, -Destination
+# and -LabSwitch default to hyper-v\settings.json (copy settings.example.json).
 #
 #   .\import-golden-vms.ps1
 #   .\import-golden-vms.ps1 -UserName jdoe -LabSwitch JCLab-Golden -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
@@ -23,14 +24,25 @@
 param(
   [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
   # The vSwitch the golden VMs' lab adapters use
-  [string]$LabSwitch = (Read-Host "The golden VMs' lab vSwitch"),
-  [string]$Source = 'C:\Users\Public\Documents\Hyper-V\Golden',
-  [string]$Destination = 'C:\ProgramData\Microsoft\Windows\Hyper-V',
+  [string]$LabSwitch,
+  # Folder of golden exports, and folder for the lab VMs
+  [string]$Source,
+  [string]$Destination,
   # VMs imported at once. Lower it on spinning disks.
   [ValidateRange(1, 16)][int]$ThrottleLimit = 3
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'JCLab.Host.ps1')
+
+# Site values not passed as parameters come from settings.json
+$settingsFile = Join-Path $PSScriptRoot 'settings.json'
+$settings = if (Test-Path $settingsFile) { Get-Content $settingsFile -Raw | ConvertFrom-Json }
+$Source, $Destination, $LabSwitch = foreach ($name in 'Source', 'Destination', 'LabSwitch') {
+  $value = (Get-Variable $name).Value
+  if (-not $value) { $value = $settings.$name }
+  if (-not $value) { throw "Set $name in $settingsFile (copy settings.example.json), or pass -$name." }
+  $value
+}
 
 # The name also becomes part of each VM's folder, so keep it path-safe
 $UserName = $UserName.Trim() -replace '\s+', '-'
