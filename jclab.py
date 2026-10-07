@@ -507,7 +507,7 @@ def hyper_v_remote(bridge, host, name, source, destination, throttle, lab_switch
     if cert["status"] == "unreachable":
         console.print(f"[red]Couldn't reach a WinRM HTTPS listener on {host}:5986 to check its certificate.[/]")
         console.print(Text(cert["detail"], style="grey62"))
-        console.print("Enable WinRM over HTTPS on the host (see docs/hyper-v.md), then try again.")
+        console.print("Enable WinRM over HTTPS on the host (see the Hyper-V page in the wiki: https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/Hyper-V), then try again.")
         return
     if cert["status"] == "invalid":
         console.print(f"[yellow]The SSL certificate on {host} isn't valid[/] (usually because it's self-signed):")

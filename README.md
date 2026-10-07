@@ -38,11 +38,14 @@ python jclab.py
 
 ## Documentation
 
-Setup, requirements, options and manual steps for each hypervisor are in
-[`docs/`](docs): [Xen Orchestra](docs/xen-orchestra.md),
-[Hyper-V](docs/hyper-v.md), [UTM on macOS](docs/utm-macos.md) and the
-[jclab.py launcher](docs/jclab.md). The comments
-at the top of each script list its options too.
+Setup, requirements, options and manual steps for each hypervisor are in the
+[wiki](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki):
+[Xen Orchestra](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/Xen-Orchestra),
+[Hyper-V](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/Hyper-V),
+[UTM on macOS](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/UTM-on-macOS),
+the [jclab.py launcher](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/jclab-launcher)
+and [converting disks for XCP-ng](https://github.com/tgs-jbraun/JumpCloud-Seeding/wiki/Convert-Disks-for-XCP-ng).
+The comments at the top of each script list its options too.
 
 Open problems and workarounds are in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
 
