@@ -22,7 +22,7 @@
 #   .\import-golden-vms.ps1 -UserName jdoe -LabSwitch JCLab-Golden -Source C:\Users\Public\Documents\Hyper-V\Golden -Destination C:\ProgramData\Microsoft\Windows\Hyper-V
 #   .\import-golden-vms.ps1 -ThrottleLimit 1   # one VM at a time, for spinning disks
 param(
-  [string]$UserName = (Read-Host 'Your name (added to each VM name)'),
+  [string]$UserName,
   # The vSwitch the golden VMs' lab adapters use
   [string]$LabSwitch,
   # Folder of golden exports, and folder for the lab VMs
@@ -32,6 +32,10 @@ param(
   [ValidateRange(1, 16)][int]$ThrottleLimit = 3
 )
 $ErrorActionPreference = 'Stop'
+if (-not (Get-Module -ListAvailable Hyper-V)) {
+  throw 'This script runs on the Hyper-V host, and this machine has no Hyper-V module. From a workstation, run jclab.py and pick the remote import (needs PowerShell 7.4).'
+}
+if (-not $UserName) { $UserName = Read-Host 'Your name (added to each VM name)' }
 . (Join-Path $PSScriptRoot 'JCLab.Host.ps1')
 
 # Site values not passed as parameters come from settings.json

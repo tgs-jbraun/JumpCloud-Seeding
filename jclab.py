@@ -59,6 +59,10 @@ except ImportError:
 REPO = Path(__file__).resolve().parent
 IS_WINDOWS = os.name == "nt"
 IS_MAC = sys.platform == "darwin"
+# The Hyper-V PowerShell module exists only where the Hyper-V role or its
+# management tools are installed. Without it, only the remote import works.
+HAS_HYPERV = IS_WINDOWS and Path(os.environ.get("SystemRoot", r"C:\Windows"),
+                                 r"System32\WindowsPowerShell\v1.0\Modules\Hyper-V").is_dir()
 ACCENT = "deep_sky_blue1"
 LABELS = {"xo": "Xen Orchestra", "hyperv": "Hyper-V", "utm": "UTM (macOS)"}
 
@@ -267,11 +271,11 @@ def readiness():
     xo = ("Terraform", None) if which("terraform") else (None, "Install Terraform: https://developer.hashicorp.com/terraform/install")
 
     if which("pwsh"):
-        hv = ("PowerShell 7 (remote)" + (" or 5.1 (on the host)" if IS_WINDOWS else ""), None)
-    elif IS_WINDOWS:
+        hv = ("PowerShell 7 (remote)" + (" or 5.1 (on the host)" if HAS_HYPERV else ""), None)
+    elif HAS_HYPERV:
         hv = ("Windows PowerShell 5.1 (on the host)", None)
     else:
-        hv = (None, "Install PowerShell 7.4: https://aka.ms/powershell")
+        hv = (None, "Install PowerShell 7.4 to import on the host remotely: https://aka.ms/powershell")
 
     if IS_MAC:
         missing = [label for ok, label in ((which("zsh"), "zsh"), (Path("/Applications/UTM.app").exists(), "UTM"),
@@ -402,7 +406,7 @@ def hyper_v():
     modes = []
     if which("pwsh"):
         modes.append(Choice("From this workstation, over WinRM HTTPS (PowerShell 7.4)", "remote"))
-    if IS_WINDOWS:
+    if HAS_HYPERV:
         modes.append(Choice("On this Hyper-V host (Windows PowerShell 5.1)", "local"))
     hv = state.setdefault("hyperv", {})
     site = site_settings("hyper-v")

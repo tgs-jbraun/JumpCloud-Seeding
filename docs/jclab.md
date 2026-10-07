@@ -33,7 +33,7 @@ jclab.py never writes a password you enter to disk. Terraform gets it through th
 
 ## Hyper-V
 
-1. Pick where the import runs: from this workstation over WinRM HTTPS, or on this Hyper-V host.
+1. Pick where the import runs: from this workstation over WinRM HTTPS, or on this Hyper-V host. jclab.py offers the second only where the Hyper-V module is installed. The remote import runs every Hyper-V command on the host, so the workstation needs only PowerShell 7.4.
 2. Enter your name, the host (remote only), the golden export and lab folders, how many VMs import at once, and the golden VMs' lab vSwitch. Your lab gets its own Private vSwitch.
 3. Review and confirm.
 

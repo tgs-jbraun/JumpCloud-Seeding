@@ -12,7 +12,7 @@ The scripts skip any golden folder that a VM registered on the host runs from. T
 
 | Runs from | Tool | Needs | Interface |
 |---|---|---|---|
-| The Hyper-V host | [`import-golden-vms.ps1`](../hyper-v/import-golden-vms.ps1) | Windows PowerShell 5.1, built in. Run it elevated. | Plain prompts and a progress bar |
+| The Hyper-V host | [`import-golden-vms.ps1`](../hyper-v/import-golden-vms.ps1) | Windows PowerShell 5.1 and the Hyper-V module, both on the host. Run it elevated. It stops on a machine without Hyper-V. | Plain prompts and a progress bar |
 | Your workstation, over WinRM HTTPS | [`jclab.py`](jclab.md), with [`JCLab.Bridge.ps1`](../hyper-v/JCLab.Bridge.ps1) | Python 3.9+, `pip install -r requirements.txt`, and PowerShell 7.4 | Tables, arrow-key menus and a live progress view |
 
 Both run their host-side steps from [`JCLab.Host.ps1`](../hyper-v/JCLab.Host.ps1), so keep it in the same folder. Both need an administrator account on the host.
