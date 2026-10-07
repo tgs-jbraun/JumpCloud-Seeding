@@ -5,7 +5,7 @@ JumpCloud-Seeding deploys the VMs for the JumpCloud lab on three hypervisors. Ea
 | Page | Hypervisor | Deploys |
 |---|---|---|
 | [Xen Orchestra](xen-orchestra.md) | XCP-ng with Xen Orchestra, through Terraform | 3 Ubuntu Server 24.04 VMs, a pfSense firewall and 3 Windows 11 VMs on an isolated lab network |
-| [Hyper-V](hyper-v.md) | Microsoft Hyper-V, through PowerShell | Each technician's copy of the golden VM exports under `C:\Users\Public\Documents\Hyper-V\Golden` |
+| [Hyper-V](hyper-v.md) | Microsoft Hyper-V, through PowerShell | Each technician's copy of the golden VM exports |
 | [UTM on macOS](utm-macos.md) | UTM on a Mac with Apple silicon, through zsh | A macOS VM duplicated from a golden VM |
 
 [jclab.py](jclab.md) sets up and runs any of the three from one terminal UI.

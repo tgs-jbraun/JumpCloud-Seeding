@@ -28,7 +28,7 @@
 #
 #   .\convert-vhdx-to-vhd.ps1 -VMName DC01, WIN11-01 -Destination C:\XCP-ng
 #   .\convert-vhdx-to-vhd.ps1 -Path C:\ProgramData\Microsoft\Windows\Hyper-V -Destination C:\XCP-ng
-#   .\convert-vhdx-to-vhd.ps1 -Path D:\disk.vhdx -Destination C:\XCP-ng -XcpNaming
+#   .\convert-vhdx-to-vhd.ps1 -Path 'C:\Users\Public\Documents\Hyper-V\Virtual Hard Disks\DC01.vhdx' -Destination C:\XCP-ng -XcpNaming
 [CmdletBinding(DefaultParameterSetName = 'Path')]
 param(
   # VHDX files, or folders to search for them (including subfolders)

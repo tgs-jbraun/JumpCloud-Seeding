@@ -1,6 +1,6 @@
 # Written with AI assistance: Claude Opus 5.5 (Anthropic), using Claude Code.
 
-# Imports every Hyper-V VM exported under C:\Users\Public\Documents\Hyper-V\Golden, renames it to
+# Imports every Hyper-V VM exported under -Source, renames it to
 # <your name>_JCLab_<name>, then starts it. It imports each VM as a copy
 # with a new ID, so the golden exports stay untouched.
 #
@@ -36,7 +36,13 @@ $ErrorActionPreference = 'Stop'
 
 # Site values not passed as parameters come from settings.json
 $settingsFile = Join-Path $PSScriptRoot 'settings.json'
-$settings = if (Test-Path $settingsFile) { Get-Content $settingsFile -Raw | ConvertFrom-Json }
+$settings = if (Test-Path $settingsFile) {
+  # JSON wants \\ in Windows paths and no comma after the last value. Accept
+  # the single \ people type, and a leftover comma, too.
+  $json = [regex]::Replace((Get-Content $settingsFile -Raw), '\\\\?', '\\') -replace ',(\s*[}\]])', '$1'
+  try { $json | ConvertFrom-Json }
+  catch { throw "$settingsFile isn't valid JSON ($($_.Exception.Message)). Compare it with settings.example.json." }
+}
 $Source, $Destination, $LabSwitch = foreach ($name in 'Source', 'Destination', 'LabSwitch') {
   $value = (Get-Variable $name).Value
   if (-not $value) { $value = $settings.$name }

@@ -44,7 +44,7 @@ Fill in `terraform.tfvars` before `plan`. Git ignores it, because it holds the X
 
 ## How the VMs are set up
 
-- **Ubuntu:** cloud-init sets the host name and adds the SSH key. Each VM's lab NIC gets a fixed, locally administered MAC address (`02:63:00:00:00:0b`, `:0c`, ...). Netplan matches the NIC by that MAC, whatever name the guest kernel gives it, and pfSense can use it for DHCP reservations. `terraform apply` waits until each VM reports an address in 192.168.1.0/24, so it waits for pfSense.
+- **Ubuntu:** cloud-init sets the host name and adds the SSH key. Each VM's lab NIC gets a fixed, locally administered MAC address (`02:63:00:00:00:0b`, `:0c`, ...). Netplan matches the NIC by that MAC, whatever name the guest kernel gives it, and pfSense can use it for DHCP reservations. `terraform apply` waits until each VM reports an address in `lab_net_cidr`, so it waits for pfSense.
 - **Windows:** keeps the template's UEFI firmware, which Windows 11 requires. The names are XO labels only, because Windows computer names are limited to 15 characters.
 - **pfSense:** its disk matches the template's 21474836480 bytes. The provider can't read a template's disk size, and disks can't shrink, so update it if the template changes.
 

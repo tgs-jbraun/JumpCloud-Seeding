@@ -94,10 +94,18 @@ except (OSError, ValueError):
 def site_settings(folder):
     """Site values (hosts, accounts, paths, names) from <folder>/settings.json.
     Git ignores it. Copy <folder>/settings.example.json to make one."""
+    path = REPO / folder / "settings.json"
     try:
-        return json.loads((REPO / folder / "settings.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError:
         return {}
+    # JSON wants \\ in Windows paths and no comma after the last value. Accept
+    # the single \ people type, and a leftover comma, too.
+    text = re.sub(r",(\s*[}\]])", r"\1", re.sub(r"\\\\?", lambda _: "\\\\", text))
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        sys.exit(f"{path} isn't valid JSON ({e}). Compare it with settings.example.json.")
 
 
 def required(value):

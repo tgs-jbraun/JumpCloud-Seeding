@@ -1,5 +1,6 @@
 {
   "_comment": "Copy to settings.json and fill in your site's values. Git ignores settings.json. Never put a password here: the scripts ask for it.",
+  "_paths": "Hyper-V's own default folders. Point Source at your golden exports and Destination at a volume with room for every technician's copies.",
   "Source": "C:\\Users\\Public\\Documents\\Hyper-V\\Golden",
   "Destination": "C:\\ProgramData\\Microsoft\\Windows\\Hyper-V",
   "LabSwitch": "JCLab-Golden",

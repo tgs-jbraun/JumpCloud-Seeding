@@ -1,12 +1,12 @@
 # Hyper-V
 
-The [`hyper-v/`](../hyper-v) folder imports golden VM exports on a Hyper-V host. Each technician gets their own copy of every golden VM, named `<name>_JCLab_<vm>` and stored under `C:\ProgramData\Microsoft\Windows\Hyper-V\<name>_JCLab_<vm>`. The golden exports stay untouched.
+The [`hyper-v/`](../hyper-v) folder imports golden VM exports on a Hyper-V host. Each technician gets their own copy of every golden VM, named `<name>_JCLab_<vm>` and stored as `<destination>\<name>_JCLab_<vm>`. The golden exports stay untouched.
 
 ## Golden exports
 
-Export each lab VM once with Hyper-V's `Export-VM` into `C:\Users\Public\Documents\Hyper-V\Golden`. An export keeps its config at `C:\Users\Public\Documents\Hyper-V\Golden\<VM>\Virtual Machines\<GUID>.vmcx`, and the scripts name each lab VM after its export folder.
+Export each lab VM once with Hyper-V's `Export-VM` into the source folder. An export keeps its config at `<source>\<VM>\Virtual Machines\<GUID>.vmcx`, and the scripts name each lab VM after its export folder.
 
-The scripts skip any golden folder that a VM registered on the host runs from. That keeps a permanent VM such as `LAB-DC`, which runs from `C:\Users\Public\Documents\Hyper-V\Golden\LAB-DC`, out of the lab, and it avoids its locked files.
+The scripts skip any golden folder that a VM registered on the host runs from. That keeps a permanent VM, such as a domain controller that runs from `<source>\DC01`, out of the lab, and it avoids its locked files.
 
 ## Two ways to run it
 
@@ -20,12 +20,12 @@ Both run their host-side steps from [`JCLab.Host.ps1`](../hyper-v/JCLab.Host.ps1
 | Setting | Default | Meaning |
 |---|---|---|
 | Your name (`-UserName`) | Asks | Added to each VM name. Spaces become dashes. |
-| Source (`-Source`) | `C:\Users\Public\Documents\Hyper-V\Golden` | Folder of golden exports on the host |
-| Destination (`-Destination`) | `C:\ProgramData\Microsoft\Windows\Hyper-V` | Folder for the lab VMs on the host |
+| Source (`-Source`) | `settings.json` | Folder of golden exports on the host. The example uses `C:\Users\Public\Documents\Hyper-V\Golden`, next to Hyper-V's default disk folder. |
+| Destination (`-Destination`) | `settings.json` | Folder for the lab VMs on the host. The example uses `C:\ProgramData\Microsoft\Windows\Hyper-V`, Hyper-V's default VM folder. |
 | At once (`-ThrottleLimit`) | `3` | VMs imported at once, 1 to 16 |
 | Lab switch (`-LabSwitch`) | Asks | The vSwitch the golden VMs' lab adapters use |
 
-Put your site's values in `hyper-v\settings.json`: copy [`settings.example.json`](../hyper-v/settings.example.json) and fill it in. Git ignores `settings.json`, and it never holds a password. It sets `Source`, `Destination` and `LabSwitch`, plus `ComputerName` and `AdminUser` for jclab.py's remote import. The host script also takes these as parameters, which win over the file. jclab.py asks for them, and also for the host and its administrator account.
+Put your site's values in `hyper-v\settings.json`: copy [`settings.example.json`](../hyper-v/settings.example.json) and fill it in. Git ignores `settings.json`, and it never holds a password. Write paths with single or double backslashes, either works. It sets `Source`, `Destination` and `LabSwitch`, plus `ComputerName` and `AdminUser` for jclab.py's remote import. The host script also takes these as parameters, which win over the file. jclab.py asks for them, and also for the host and its administrator account.
 
 ## What happens on a run
 
