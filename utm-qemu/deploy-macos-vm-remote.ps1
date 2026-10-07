@@ -48,7 +48,9 @@ $recentFile = Join-Path $env:APPDATA 'JumpCloud-Seeding\utm-remote.json'
 $recent = try { Get-Content $recentFile -Raw | ConvertFrom-Json } catch { $null }
 # Site values: the Mac, its account and the golden VM, from settings.json next
 # to this script (copy settings.example.json). The last run's answers win.
-$settings = try { Get-Content (Join-Path $PSScriptRoot 'settings.json') -Raw | ConvertFrom-Json } catch { $null }
+# Read-LabSettings checks the file and stops at a bad line.
+. (Join-Path $PSScriptRoot '..\hyper-v\JCLab.Host.ps1')
+$settings = Read-LabSettings (Join-Path $PSScriptRoot 'settings.json') 'GoldenVM', 'ComputerName', 'User'
 if (-not $Golden) { $Golden = $settings.GoldenVM }
 
 # Press Enter to keep the value in brackets

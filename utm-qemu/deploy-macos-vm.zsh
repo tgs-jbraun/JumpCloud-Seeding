@@ -135,9 +135,14 @@ gum style --bold --foreground 39 --border double --border-foreground 39 \
   --align center --width 44 --padding '1 2' 'JumpCloud Lab' 'UTM macOS deploy'
 
 last_tech=$(defaults read $prefs TechName 2>/dev/null) || last_tech=''
-# The last golden VM, else settings.json (plutil reads JSON on macOS)
+# The last golden VM, else settings.json (plutil reads JSON on macOS). Check
+# the file first, so a typo stops here instead of being skipped.
+settings=${0:A:h}/settings.json
+if [[ -f $settings ]] && ! err=$(plutil -convert xml1 -o /dev/null $settings 2>&1); then
+  die "$settings isn't valid JSON. Compare it with settings.example.json.\n  ${err//\%/%%}"
+fi
 last_golden=$(defaults read $prefs GoldenVM 2>/dev/null) ||
-  last_golden=$(plutil -extract GoldenVM raw -o - "${0:A:h}/settings.json" 2>/dev/null) || last_golden=''
+  last_golden=$(plutil -extract GoldenVM raw -o - $settings 2>/dev/null) || last_golden=''
 
 [[ -n $tech ]] || tech=$(gum input --header 'Your name (added to the VM name)' --value "$last_tech")
 [[ -n $golden ]] || golden=$(gum input --header 'Golden VM in UTM' --value "$last_golden")

@@ -5,6 +5,33 @@
 # loads it into its session on the host once it connects.
 $ErrorActionPreference = 'Stop'
 
+# Reads a settings.json, written as in settings.example.json: one
+# "Name": "value" per line. Stops at the first bad line with its number and
+# the reason, so a typo never reaches the rest of the script. Accepts single
+# backslashes in paths and a comma after the last value. Returns nothing if
+# the file doesn't exist. jclab.py's site_settings checks the same rules.
+function Read-LabSettings($Path, [string[]]$Keys) {
+  if (-not (Test-Path $Path)) { return }
+  $settings = [ordered]@{}
+  $n = 0
+  foreach ($raw in Get-Content $Path) {
+    $n++
+    # JSON wants \\ in paths, so make every backslash a pair
+    $line = [regex]::Replace($raw.Trim(), '\\\\?', '\\')
+    if ($line -in '', '{', '}') { continue }
+    if ($line -match '^"([^"]*)"\s*:\s*"(.*)"\s*,?$') {
+      $name, $value = $Matches[1], $Matches[2]
+      $problem = if ($value -match '"|^''|''$') { 'the value has a stray quote' }
+        elseif ($name -notlike '_*' -and $Keys -notcontains $name) { "unknown setting '$name'. Use $($Keys -join ', ')" }
+        elseif ($settings.Contains($name)) { "$name is set twice" }
+    } elseif ($line -match '^"[^"]*"\s*:\s*"[^"]*$') { $problem = 'the value has no closing quote' }
+    else { $problem = 'write each setting as "Name": "value"' }
+    if ($problem) { throw "$Path line ${n}: $problem. Compare it with settings.example.json.`n  $raw" }
+    $settings[$name] = $value.Replace('\\', '\')
+  }
+  [pscustomobject]$settings
+}
+
 # True if $Path is $Dir or inside it
 function Test-InFolder($Path, $Dir) {
   $Path -and "$Path\".StartsWith("$Dir\", [StringComparison]::OrdinalIgnoreCase)

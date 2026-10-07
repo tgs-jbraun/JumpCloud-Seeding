@@ -91,21 +91,41 @@ except (OSError, ValueError):
     state = {}
 
 
+SETTING_KEYS = {"hyper-v": ("Source", "Destination", "LabSwitch", "ComputerName", "AdminUser"),
+                "utm-qemu": ("GoldenVM", "ComputerName", "User")}
+
+
 def site_settings(folder):
     """Site values (hosts, accounts, paths, names) from <folder>/settings.json.
-    Git ignores it. Copy <folder>/settings.example.json to make one."""
+    Git ignores it. Copy <folder>/settings.example.json to make one.
+
+    Checks the file the way Read-LabSettings in JCLab.Host.ps1 does: one
+    "Name": "value" per line, stopping at the first bad line with its number
+    and the reason. Accepts single backslashes and a comma after the last value."""
     path = REPO / folder / "settings.json"
     try:
-        text = path.read_text(encoding="utf-8-sig")
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
     except OSError:
         return {}
-    # JSON wants \\ in Windows paths and no comma after the last value. Accept
-    # the single \ people type, and a leftover comma, too.
-    text = re.sub(r",(\s*[}\]])", r"\1", re.sub(r"\\\\?", lambda _: "\\\\", text))
-    try:
-        return json.loads(text)
-    except ValueError as e:
-        sys.exit(f"{path} isn't valid JSON ({e}). Compare it with settings.example.json.")
+    keys, settings = SETTING_KEYS[folder], {}
+    for n, raw in enumerate(lines, 1):
+        # JSON wants \\ in paths, so make every backslash a pair
+        line = re.sub(r"\\\\?", lambda _: "\\\\", raw.strip())
+        if line in ("", "{", "}"):
+            continue
+        if m := re.fullmatch(r'"([^"]*)"\s*:\s*"(.*)"\s*,?', line):
+            name, value = m.groups()
+            problem = ("the value has a stray quote" if re.search(r"\"|^'|'$", value)
+                       else f"unknown setting '{name}'. Use {', '.join(keys)}" if not name.startswith("_") and name not in keys
+                       else f"{name} is set twice" if name in settings else None)
+        elif re.fullmatch(r'"[^"]*"\s*:\s*"[^"]*', line):
+            problem = "the value has no closing quote"
+        else:
+            problem = 'write each setting as "Name": "value"'
+        if problem:
+            sys.exit(f"{path} line {n}: {problem}. Compare it with settings.example.json.\n  {raw}")
+        settings[name] = value.replace("\\\\", "\\")
+    return settings
 
 
 def required(value):

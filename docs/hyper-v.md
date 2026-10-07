@@ -25,7 +25,7 @@ Both run their host-side steps from [`JCLab.Host.ps1`](../hyper-v/JCLab.Host.ps1
 | At once (`-ThrottleLimit`) | `3` | VMs imported at once, 1 to 16 |
 | Lab switch (`-LabSwitch`) | Asks | The vSwitch the golden VMs' lab adapters use |
 
-Put your site's values in `hyper-v\settings.json`: copy [`settings.example.json`](../hyper-v/settings.example.json) and fill it in. Git ignores `settings.json`, and it never holds a password. Write paths with single or double backslashes, either works. It sets `Source`, `Destination` and `LabSwitch`, plus `ComputerName` and `AdminUser` for jclab.py's remote import. The host script also takes these as parameters, which win over the file. jclab.py asks for them, and also for the host and its administrator account.
+Put your site's values in `hyper-v\settings.json`: copy [`settings.example.json`](../hyper-v/settings.example.json) and fill it in. Git ignores `settings.json`, and it never holds a password. Write paths with single or double backslashes, either works. The scripts check the file before using it, and stop at a bad line, such as a stray quote or a misspelled setting, with its line number. It sets `Source`, `Destination` and `LabSwitch`, plus `ComputerName` and `AdminUser` for jclab.py's remote import. The host script also takes these as parameters, which win over the file. jclab.py asks for them, and also for the host and its administrator account.
 
 ## What happens on a run
 

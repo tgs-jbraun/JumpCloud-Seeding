@@ -36,13 +36,7 @@ $ErrorActionPreference = 'Stop'
 
 # Site values not passed as parameters come from settings.json
 $settingsFile = Join-Path $PSScriptRoot 'settings.json'
-$settings = if (Test-Path $settingsFile) {
-  # JSON wants \\ in Windows paths and no comma after the last value. Accept
-  # the single \ people type, and a leftover comma, too.
-  $json = [regex]::Replace((Get-Content $settingsFile -Raw), '\\\\?', '\\') -replace ',(\s*[}\]])', '$1'
-  try { $json | ConvertFrom-Json }
-  catch { throw "$settingsFile isn't valid JSON ($($_.Exception.Message)). Compare it with settings.example.json." }
-}
+$settings = Read-LabSettings $settingsFile 'Source', 'Destination', 'LabSwitch', 'ComputerName', 'AdminUser'
 $Source, $Destination, $LabSwitch = foreach ($name in 'Source', 'Destination', 'LabSwitch') {
   $value = (Get-Variable $name).Value
   if (-not $value) { $value = $settings.$name }
